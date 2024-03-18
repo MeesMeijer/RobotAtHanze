@@ -22,11 +22,11 @@ class HCSR04:
         """
         self.echo_timeout_us = echo_timeout_us
         # Init trigger pin (out)
-        self.trigger = Pin(trigger_pin, mode=Pin.OUT, pull=None)
+        self.trigger = Pin(trigger_pin, mode=Pin.OUT)
         self.trigger.value(0)
 
         # Init echo pin (in)
-        self.echo = Pin(echo_pin, mode=Pin.IN, pull=None)
+        self.echo = Pin(echo_pin, mode=Pin.IN)
 
     def _send_pulse_and_wait(self):
         """
@@ -73,4 +73,9 @@ class HCSR04:
         # the sound speed on air (343.2 m/s), that It's equivalent to
         # 0.034320 cm/us that is 1cm each 29.1us
         cms = (pulse_time / 2) / 29.1
+        return self.zero(cms)
+
+    def zero(self, cms):
+        """ return the distance as a result of the calibration """
+        # TODO: Calibrate
         return cms

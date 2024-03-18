@@ -4,21 +4,21 @@
 
 class PID:
     _i = 0
-    _lp = 0
+    _lastP = 0
 
     def __init__(self, P=None, I=None, D=None):
-        self._Kp = P
-        self._Ki = I
-        self._Kd = D
+        self._Kp = P  # 5
+        self._Ki = I  # 0
+        self._Kd = D  # (p-1)*10
 
-    def calc(self, setpoint,  mesurement):
+    def calc(self, setpoint, measurement):
 
-        error = mesurement-setpoint;
+        error = measurement - setpoint
 
-        p = error;
-        self._i += p;
-        d = p - self._lp;
+        p = error
+        self._i += p
+        d = p - self._lastP
 
-        self._lp = p;
+        self._lastP = p
 
-        return int(self._Kp *p + self._Ki*self._i + self._Kd*d);
+        return int(self._Kp * p + self._Ki * self._i + self._Kd * d)

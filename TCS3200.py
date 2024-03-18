@@ -26,10 +26,18 @@ class TCS3200:
         self._MCP.pin(self.S3, value=color[1])
 
         time.sleep(0.2)
-
         start = time.ticks_us()
         for _ in range(self.cyles):
             machine.time_pulse_us(self.OUT, 0)
         duration = time.ticks_diff(time.ticks_us(), start)
 
         return self.cyles*(1_000_000) / (duration)
+
+    def rgb(self) -> tuple[float, float, float]:
+        """ returns (r,g,b) """
+
+        return (
+            self.get(self.RED),
+            self.get(self.GREEN),
+            self.get(self.BLUE),
+        )
