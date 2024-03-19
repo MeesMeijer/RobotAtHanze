@@ -49,8 +49,8 @@ TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
 
 def checkI2CDevices():
-    busA = [0x36, 0x68, 0x20]
-    busB = [0x36]
+    busB = [0x36, 0x68, 0x20]
+    busA = [0x36]
 
     devicesA = I2CA.scan()
     devicesB = I2CB.scan()
@@ -76,6 +76,8 @@ def checkI2CDevices():
 
 def driveToBoxAndConnect():
     while not SWITCH.value():
+        print(".")
+        time.sleep(0.1)
         # TODO: drive straight on the line to the box.
         pass
 
@@ -94,14 +96,30 @@ MASR = ASMethods(ASR.RAWANGLE)
 
 
 # TODO: Check if this works
-# degAngleL = MASL.toDeg(ASL.RAWANGLE)
-# totalAngleL = MASL.checkQuadrant(degAngle)
-# posL = totalAngleL / 0.45
+
 
 # r,g,b = TCS.rgb()
 
 
 while True:
-    # TODO: Check if A3 and A4 are fliped.
-    print(LINE.read())
+    # print(TCS.rgb())
+    # driveToBoxAndConnect()
+    # checkI2CDevices()
+
+    degAngleL = MASL.toDeg(ASL.RAWANGLE)
+    totalAngleL = MASL.checkQuadrant(degAngleL)
+    posL = totalAngleL / 0.45
+
+    degAngleR = MASR.toDeg(ASR.RAWANGLE)
+    totalAngleR = MASR.checkQuadrant(degAngleR)
+    posR = totalAngleR / 0.45
+
+    print(
+        f" \n\
+        Deg: {degAngleL} \t {degAngleR} \n\
+        Angle: {totalAngleL} \t {totalAngleR}\n\
+        Pos: {posL} \t {posR} \n\
+        "
+    )
+
     time.sleep(0.2)

@@ -213,3 +213,4 @@ class ASMethods:
             self._prevQuadrantNumber = quadrantNum
 
         self._totalAngle = (self._numberOfTurns * 360) + correctedAngle
+        return self._totalAngle
