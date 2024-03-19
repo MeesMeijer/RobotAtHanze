@@ -43,6 +43,7 @@ T = TypeVar('T')
 
 def main(args: List[str], **kwargs) -> None:
     global verbose
+    
     opts = docopt(__doc__, argv=args)
     verbose = opts['--verbose']
     root = opts['PATH']

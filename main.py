@@ -1,14 +1,14 @@
-from DCMOTOR import DCMotor
+from motors import DCMotor
 import machine
 import time
 from machine import Pin, PWM
-from mpc23017 import MCP23017
-from SR04 import HCSR04
-from imu import MPU6050
+from MCP23017 import MCP23017
+from HSR04 import HCSR04
+from MPU6050 import MPU6050
 from AS5600 import AS5600, ASMethods
 from TCS3200 import TCS3200
 from pins import *
-from linesensor import LineSensor
+from IRlineSensor import LineSensor
 
 frequency = 15000
 

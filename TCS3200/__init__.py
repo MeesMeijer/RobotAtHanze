@@ -2,7 +2,7 @@ import time
 
 import machine
 
-from mpc23017 import MCP23017
+from MCP23017 import MCP23017
 from machine import Pin
 
 class TCS3200:

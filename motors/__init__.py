@@ -1,5 +1,5 @@
 import machine
-from mpc23017 import MCP23017
+from MCP23017 import MCP23017
 
 
 

@@ -29,6 +29,6 @@ class LineSensor:
     def movingAvarage(self):
         readings = self.read()
         return (
-            -2000*readings[0] + -1000*readings[1] + 0*readings[2] + 1000*readings[3] + 2000*readings[4]
+                -2000*readings[0] + -1000*readings[1] + 0*readings[2] + 1000*readings[3] + 2000*readings[4]
         ) / (sum(readings))
 
