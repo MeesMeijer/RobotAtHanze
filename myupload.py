@@ -25,12 +25,12 @@ PROJECT_PATH = os.getcwd()
 # remoteDirs = [path.removeprefix("/") for path in remoteRootFiles if path.find(".") == -1]
 
 def isDir(name):
-    if name.find(".") == -1:
+    if name.find(".") == -1 and name not in ["venv", "__pycache__"]:
         return True
     return False
 
 def isFile(name):
-    if name.endswith('.py') and name not in ["/boot.py", "/myupload.py", "upload.py"]:
+    if name.endswith('.py') and name not in ["/boot.py", "/myupload.py", "upload.py", "__pycache__"]:
         return True
     return False
 
@@ -41,6 +41,7 @@ for item in os.listdir(PROJECT_PATH):
         toAddDirss.append(f"/{item}")
         for i in os.listdir(f"{PROJECT_PATH}/{item}"):
             if isDir(i):
+                print(f"{PROJECT_PATH}/{item}")
                 raise Exception("Dirs cant be deeper than 1. Needs work")
             elif isFile(i):
                 toAddFiles.append(f"/{item}/{i}")

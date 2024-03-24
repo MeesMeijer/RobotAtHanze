@@ -50,3 +50,7 @@ TRIG_MAGNET = 23
 
 # limit switch
 LIMIT_SWITCH = 27
+
+#wifi
+SSID = "ESP_WIFI"
+PASSWORD = "123456789"

@@ -9,6 +9,10 @@ from AS5600 import AS5600, ASMethods
 from TCS3200 import TCS3200
 from pins import *
 from IRlineSensor import LineSensor
+from asyncws import AsyncWebsocketClient
+import gc
+from random import randint
+
 
 frequency = 15000
 
@@ -82,17 +86,17 @@ def driveToBoxAndConnect():
         pass
 
 
-# Blocking when magnet is not detected by sensors.
-#TODO: Check if this works
+# # Blocking when magnet is not detected by sensors.
+# #TODO: Check if this works
 while not ASL.MD or not ASR.MD:
     # L = 1 if ASL.MD else 0
     print("Magnet not detected by AS5600 L/R", ASL.MD, ASR.MD)
     time.sleep(0.3)
-
-
-# defining start angles.
-MASL = ASMethods(ASL.RAWANGLE)
-MASR = ASMethods(ASR.RAWANGLE)
+#
+#
+# # defining start angles.
+# MASL = ASMethods(ASL.RAWANGLE)
+# MASR = ASMethods(ASR.RAWANGLE)
 
 
 # TODO: Check if this works
@@ -101,25 +105,143 @@ MASR = ASMethods(ASR.RAWANGLE)
 # r,g,b = TCS.rgb()
 
 
-while True:
+# while True:
     # print(TCS.rgb())
     # driveToBoxAndConnect()
     # checkI2CDevices()
 
-    degAngleL = MASL.toDeg(ASL.RAWANGLE)
-    totalAngleL = MASL.checkQuadrant(degAngleL)
-    posL = totalAngleL / 0.45
+    # degAngleL = MASL.toDeg(ASL.RAWANGLE)
+    # totalAngleL = MASL.checkQuadrant(degAngleL)
+    # posL = totalAngleL / 0.45
+    #
+    # degAngleR = MASR.toDeg(ASR.RAWANGLE)
+    # totalAngleR = MASR.checkQuadrant(degAngleR)
+    # posR = totalAngleR / 0.45
+    #
+    # print(
+    #     f" \n\
+    #     Deg: {degAngleL} \t {degAngleR} \n\
+    #     Angle: {totalAngleL} \t {totalAngleR}\n\
+    #     Pos: {posL} \t {posR} \n\
+    #     "
+    # )
+    #
+    # time.sleep(0.2)
 
-    degAngleR = MASR.toDeg(ASR.RAWANGLE)
-    totalAngleR = MASR.checkQuadrant(degAngleR)
-    posR = totalAngleR / 0.45
 
-    print(
-        f" \n\
-        Deg: {degAngleL} \t {degAngleR} \n\
-        Angle: {totalAngleL} \t {totalAngleR}\n\
-        Pos: {posL} \t {posR} \n\
-        "
-    )
+# import uasyncio as a
+# import network
+#
+# ws = AsyncWebsocketClient(3000)
+#
+# lock = a.Lock()
+# data_from_ws = []
 
-    time.sleep(0.2)
+# async def connectToWifi():
+#     wifi = network.WLAN(network.STA_IF)
+#     wifi.active(1)
+#
+#     while not wifi.isconnected():
+#         print("Wifi connecting.. ")
+#
+#         if wifi.status() != network.STAT_CONNECTING:
+#             wifi.connect(SSID, PASSWORD)
+#
+#         await a.sleep(0.4)
+#
+#     if wifi.isconnected():
+#         print("ifconfig: {}".format(wifi.ifconfig()))
+#     else:
+#         print("Wifi not connected.")
+#
+#     return wifi
+
+# p2 = Pin(2, Pin.OUT)
+# async def blink_sos():
+#     global p2
+#
+#     async def blink(on_ms: int, off_ms: int):
+#         p2.on()
+#         await a.sleep_ms(on_ms)
+#         p2.off()
+#         await a.sleep_ms(off_ms)
+#
+#     await blink(200, 50)
+#     await blink(200, 50)
+#     await blink(200, 50)
+#     await blink(400, 50)
+#     await blink(400, 50)
+#     await blink(400, 50)
+#     await blink(200, 50)
+#     await blink(200, 50)
+#     await blink(200, 50)
+#
+#
+# async def blink_loop():
+#     global lock
+#     global data_from_ws
+#     global ws
+#
+#     # Main "work" cycle. It should be awaitable as possible.
+#     while True:
+#         # await blink_sos()
+#         if ws is not None:
+#             if await ws.open():
+#                 await ws.send('SOS!')
+#                 print("SOS!", end=' ')
+#
+#             # lock data archive
+#             await lock.acquire()
+#             if data_from_ws:
+#                 for item in data_from_ws:
+#                     print("\nData from ws: {}".format(item))
+#                 data_from_ws = []
+#             lock.release()
+#             gc.collect()
+#
+#         await a.sleep_ms(400)
+#
+# async def read_loop():
+#     global config
+#     global lock
+#     global data_from_ws
+#
+#     # may be, it
+#     wifi = await connectToWifi()
+#     while True:
+#         gc.collect()
+#         if not wifi.isconnected():
+#             wifi = await connectToWifi()
+#             if not wifi.isconnected():
+#                 await a.sleep_ms(4000)
+#                 continue
+#         try:
+#             print("Handshaking...")
+#
+#             # connect to test socket server with random client number
+#             if not await ws.handshake("{}{}".format(f"ws://{wifi.ifconfig()[2]}:8000/", randint(1, 100))):
+#                 raise Exception('Handshake error.')
+#             print("...handshaked.")
+#             mes_count = 0
+#             while await ws.open():
+#                 data = await ws.recv()
+#                 print("Data: " + str(data) + "; ")
+#                 # ?lose socket for every 10 messages (even ping/pong)
+#                 if mes_count == 10:
+#                     await ws.close()
+#                     print("ws is open: " + str(await ws.open()))
+#                 mes_count += 1
+#                 if data is not None:
+#                     await lock.acquire()
+#                     data_from_ws.append(data)
+#                     lock.release()
+#
+#                 await a.sleep_ms(50)
+#         except Exception as ex:
+#             print("Exception: {}".format(ex))
+#             await a.sleep(1)
+# async def main():
+#     tasks = [read_loop(), blink_loop()]
+#     await a.gather(*tasks)
+
+# s
