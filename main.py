@@ -12,15 +12,15 @@ from IRlineSensor import LineSensor
 from asyncws import AsyncWebsocketClient
 import gc
 from random import randint
-
+from PID import PID
 
 frequency = 15000
 
 I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
 
-MCP = MCP23017(I2CB, 0x20)
-MPU = MPU6050(I2CB)
+MCP = MCP23017(I2CA, 0x20)
+MPU = MPU6050(I2CA)
 
 ASL = AS5600(I2CB, 0x36)
 ASR = AS5600(I2CA, 0x36)
@@ -43,91 +43,89 @@ MCP.pin(S2, mode=0, value=0)  # S2
 MCP.pin(S3, mode=0, value=0)  # S3
 MCP.pin(LED, mode=0, value=0)  # LED
 MCP.pin(DIRA, mode=0, value=0)
-MCP.pin(DIRB, mode=0, value=0)
+MCP.pin(DIRB, mode=0, value=1)
 
 motorL = DCMotor(MCP, IN1, IN2, PWM(Pin(ENA), freq=frequency))
-motorR = DCMotor(MCP, IN3, IN4, PWM(Pin(ENB), freq=frequency))
+motorR = DCMotor(MCP, IN4, IN3, PWM(Pin(ENB), freq=frequency))
 
 # Color sensor
 TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
 
 def checkI2CDevices():
-    busB = [0x36, 0x68, 0x20]
-    busA = [0x36]
+    busB = [0x36]
+    busA = [0x36, 0x68, 0x20]
 
     devicesA = I2CA.scan()
     devicesB = I2CB.scan()
 
     # TODO: Check if this works
-    print("DEBUG", devicesA)
-    print("DEBUG", devicesB)
+    print("DEBUGA", [hex(d) for d in devicesA])
+    print("DEBUGB", [hex(dc) for dc in devicesB])
 
     found = 0
-    for addr in busA:
-        if addr not in devicesA:
-            print(hex(addr), "Expected, but not found in busA")
+    for addra in busA:
+        if addra not in devicesA:
+            print(hex(addra), "Expected, but not found in busA")
         else:
             found += 1
 
-    for addr in busB:
-        if addr not in devicesB:
-            print(hex(addr), "Expected, but not found in busB")
+    for addrb in busB:
+        if addrb not in devicesB:
+            print(hex(addrb), "Expected, but not found in busB")
         else:
             found += 1
 
     return True if found == 4 else False
 
-def driveToBoxAndConnect():
-    while not SWITCH.value():
-        print(".")
-        time.sleep(0.1)
-        # TODO: drive straight on the line to the box.
-        pass
-
-
-# # Blocking when magnet is not detected by sensors.
-# #TODO: Check if this works
-while not ASL.MD or not ASR.MD:
-    # L = 1 if ASL.MD else 0
-    print("Magnet not detected by AS5600 L/R", ASL.MD, ASR.MD)
-    time.sleep(0.3)
+# def driveToBoxAndConnect():
+#     while not SWITCH.value():
+#         print(".")
+#         time.sleep(0.1)
+#         # TODO: drive straight on the line to the box.
+#         pass
 #
 #
-# # defining start angles.
-# MASL = ASMethods(ASL.RAWANGLE)
-# MASR = ASMethods(ASR.RAWANGLE)
+# # # Blocking when magnet is not detected by sensors.
+# # #TODO: Check if this works
+# while not ASL.MD or not ASR.MD:
+#     # L = 1 if ASL.MD else 0
+#     print("Magnet not detected by AS5600 L/R", ASL.MD, ASR.MD)
+#     time.sleep(0.3)
+
+MASL = ASMethods(ASL.RAWANGLE)
+MASR = ASMethods(ASR.RAWANGLE)
+
+a, b = False, False
 
 
-# TODO: Check if this works
+pidR = PID(5, 0, 0)
+pidL = PID(5, 0, 0)
 
 
-# r,g,b = TCS.rgb()
+while True:
+    degAngleL = MASL.toDeg(ASL.RAWANGLE)
+    totalAngleL = MASL.checkQuadrant(degAngleL)
+    posL = totalAngleL / 0.45
+
+    degAngleR = MASR.toDeg(ASR.RAWANGLE)
+    totalAngleR = MASR.checkQuadrant(degAngleR)
+    posR = totalAngleR / 0.45
+
+    setpoint = 2000
+    errL = (setpoint - posL)
+    errR = (setpoint - posR)
 
 
-# while True:
-    # print(TCS.rgb())
-    # driveToBoxAndConnect()
-    # checkI2CDevices()
+    print(
+        f" \n\
+        Deg: {degAngleL} \t {degAngleR} \n\
+        Angle: {totalAngleL} \t {totalAngleR}\n\
+        Pos: {posL} \t {posR} \n\
+        "
+    )
 
-    # degAngleL = MASL.toDeg(ASL.RAWANGLE)
-    # totalAngleL = MASL.checkQuadrant(degAngleL)
-    # posL = totalAngleL / 0.45
-    #
-    # degAngleR = MASR.toDeg(ASR.RAWANGLE)
-    # totalAngleR = MASR.checkQuadrant(degAngleR)
-    # posR = totalAngleR / 0.45
-    #
-    # print(
-    #     f" \n\
-    #     Deg: {degAngleL} \t {degAngleR} \n\
-    #     Angle: {totalAngleL} \t {totalAngleR}\n\
-    #     Pos: {posL} \t {posR} \n\
-    #     "
-    # )
-    #
     # time.sleep(0.2)
-
 
 # import uasyncio as a
 # import network

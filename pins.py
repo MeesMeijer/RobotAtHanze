@@ -27,8 +27,8 @@ IN1 = MPC_A_7
 IN2 = MPC_A_6
 IN3 = MPC_A_5
 IN4 = MPC_A_4
-ENA = 26
-ENB = 25
+ENA = 25
+ENB = 26
 
 # Ultrasonic sensor
 ECHO = 2

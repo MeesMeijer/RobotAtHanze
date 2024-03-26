@@ -20,19 +20,14 @@ class DCMotor:
         self.MCP.pin(self.pin1, value=0)
         self.MCP.pin(self.pin2, value=1)
 
-    def backwards(self, speed):
+    def backward(self, speed):
         self._speed = speed
         self.enable_pin.duty_u16(self._duty_cycle(self._speed))
-        # self.pin2.value(0)
-        # self.pin1.value(1)
-
         self.MCP.pin(self.pin1, value=1)
         self.MCP.pin(self.pin2, value=0)
 
     def stop(self):
         self.enable_pin.duty_u16(0)
-        # self.pin1.value(0)
-        # self.pin2.value(0)
         self.MCP.pin(self.pin1, value=0)
         self.MCP.pin(self.pin2, value=0)
 
