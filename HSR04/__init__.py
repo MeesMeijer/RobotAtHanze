@@ -76,6 +76,10 @@ class HCSR04:
         return self.zero(cms)
 
     def zero(self, cms):
+
         """ return the distance as a result of the calibration """
         # TODO: Calibrate
         return cms
+
+
+

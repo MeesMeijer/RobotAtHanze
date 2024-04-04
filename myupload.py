@@ -30,7 +30,7 @@ def isDir(name):
     return False
 
 def isFile(name):
-    if name.endswith('.py') and name not in ["/boot.py", "/myupload.py", "upload.py", "__pycache__"]:
+    if name.endswith('.py') and name not in ["boot.py", "myupload.py", "upload.py", "__pycache__","micropython-test.iml"]:
         return True
     return False
 

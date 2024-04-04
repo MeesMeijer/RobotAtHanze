@@ -15,13 +15,13 @@ class DCMotor:
         self.max_duty = max_duty
 
     def forward(self, speed):
-        self._speed = speed
+        self._speed = speed if speed < 100 else 100
         self.enable_pin.duty_u16(self._duty_cycle(self._speed))
         self.MCP.pin(self.pin1, value=0)
         self.MCP.pin(self.pin2, value=1)
 
     def backward(self, speed):
-        self._speed = speed
+        self._speed = speed if speed < 100 else 100
         self.enable_pin.duty_u16(self._duty_cycle(self._speed))
         self.MCP.pin(self.pin1, value=1)
         self.MCP.pin(self.pin2, value=0)
@@ -32,7 +32,7 @@ class DCMotor:
         self.MCP.pin(self.pin2, value=0)
 
     def _duty_cycle(self, speed):
-        if self._speed <= 0 or self._speed > 100:
+        if self._speed <= 0:
             duty_cycle = 0
         else:
             duty_cycle = int(self.min_duty + (self.max_duty - self.min_duty)*((self._speed-1)/(100-1)))

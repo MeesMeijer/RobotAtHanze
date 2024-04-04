@@ -169,6 +169,7 @@ class MCP23017():
     def init(self):
         # error if device not found at i2c addr
         if self._i2c.scan().count(self._address) == 0:
+        # if self._i2c.scan().count(self._address) == 0:
             raise OSError('MCP23017 not found at I2C address {:#x}'.format(self._address))
 
         self.porta = Port(0, self)

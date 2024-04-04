@@ -4,15 +4,31 @@ import time
 from machine import Pin, PWM
 from MCP23017 import MCP23017
 from HSR04 import HCSR04
-from MPU6050 import MPU6050
+from COMPAS import QMC5883L
 from AS5600 import AS5600, ASMethods
 from TCS3200 import TCS3200
 from pins import *
 from IRlineSensor import LineSensor
-from asyncws import AsyncWebsocketClient
-import gc
-from random import randint
-from PID import PID
+
+class MedianFilter:
+    def __init__(self, window_size):
+        self.window_size = window_size
+        self.values = []
+    def update(self, value):
+        self.values.append(value)
+        if len(self.values) > self.window_size:
+            self.values.pop(0)
+
+    def get_median(self):
+        sorted_values = sorted(self.values)
+        window_midpoint = len(sorted_values) // 2
+        if len(sorted_values) % 2 == 0:
+            return (sorted_values[window_midpoint - 1] + sorted_values[window_midpoint]) / 2
+        else:
+            return sorted_values[window_midpoint]
+    def reset(self):
+        self.values = [120]
+
 
 frequency = 15000
 
@@ -20,17 +36,21 @@ I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
 
 MCP = MCP23017(I2CA, 0x20)
-MPU = MPU6050(I2CA)
+COMP = QMC5883L(i2c=I2CA, offset=50.0)
 
 ASL = AS5600(I2CB, 0x36)
 ASR = AS5600(I2CA, 0x36)
 
-SONIC = HCSR04(echo_pin=4, trigger_pin=2)
-LINE = LineSensor(Pin(A1, Pin.IN), Pin(A2, Pin.IN), Pin(A3, Pin.IN), Pin(A4, Pin.IN), Pin(A5, Pin.IN))
+# MASL = ASMethods(ASL.RAWANGLE)
+# MASR = ASMethods(ASR.RAWANGLE)
+
+
+SONIC = HCSR04(echo_pin=ECHO, trigger_pin=TRIG)
+LINE = LineSensor(Pin(A2, Pin.IN), Pin(A2, Pin.IN), Pin(A3, Pin.IN), Pin(A4, Pin.IN), Pin(A5, Pin.IN))
 
 SWITCH = Pin(LIMIT_SWITCH, Pin.IN)
-
-MPU.wake()
+MAGNET = Pin(TRIG_MAGNET, Pin.OUT, value=0)
+# MPU.wake()
 MCP.init()
 
 MCP.pin(IN1, mode=0, value=0)  # in1
@@ -54,7 +74,7 @@ TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
 def checkI2CDevices():
     busB = [0x36]
-    busA = [0x36, 0x68, 0x20]
+    busA = [0x36, 0xd, 0x20]
 
     devicesA = I2CA.scan()
     devicesB = I2CB.scan()
@@ -78,168 +98,178 @@ def checkI2CDevices():
 
     return True if found == 4 else False
 
-# def driveToBoxAndConnect():
-#     while not SWITCH.value():
-#         print(".")
-#         time.sleep(0.1)
-#         # TODO: drive straight on the line to the box.
-#         pass
-#
-#
-# # # Blocking when magnet is not detected by sensors.
-# # #TODO: Check if this works
-# while not ASL.MD or not ASR.MD:
-#     # L = 1 if ASL.MD else 0
-#     print("Magnet not detected by AS5600 L/R", ASL.MD, ASR.MD)
-#     time.sleep(0.3)
 
-MASL = ASMethods(ASL.RAWANGLE)
-MASR = ASMethods(ASR.RAWANGLE)
+# while True:
+#     [A1, A2, A3, A4, A5] = LINE.readRaw()
+#     print([A1, A2, A3, A4, A5])
+#     time.sleep(0.2)
 
-a, b = False, False
+# while True:
+#     r,g,b  = TCS.rgb()
+#     print(r,g,b,)
+#     time.sleep(0.2)
+WHITE_TRESHHOLD = 700
 
 
-pidR = PID(5, 0, 0)
-pidL = PID(5, 0, 0)
+def toInts(readings: list[int]) -> list[bool]:
+    return [bool(x < WHITE_TRESHHOLD) for x in readings]
 
+
+def only(pos: int, state: bool, readings: list[bool]) -> bool:
+    x_p = 0
+    for x in readings:
+        if x == state and x_p != pos: return False
+        x_p += 1
+    return True
+
+
+STATES = ['STRAIGHT', 'LEFT_CORNER', "RIGHT_CORNER"]
+
+states = {
+    (0, 0, 1, 0, 0): STATES[0],
+    (0, 1, 0, 0, 0): STATES[0],
+    (0, 0, 0, 1, 0): STATES[0],
+    (0, 1, 1, 0, 0): STATES[0],
+    (0, 0, 1, 1, 0): STATES[0],
+    (0 ,1, 1, 1, 0): STATES[0],
+    (0, 0, 0, 1, 1): STATES[0],
+    (1, 1, 0, 0, 0): STATES[0],
+    (1, 1, 1, 0, 0): STATES[0],
+    (0, 0, 1, 1, 1): STATES[0],
+    (0, 1, 1, 1, 1): STATES[2],
+    (1, 1, 1, 1, 0): STATES[1],
+    (0, 0, 0, 0, 0): "STOP"
+}
+
+
+# Function to control robot movement based on sensor inputs
+def control_robot(A1, A2, A3, A4, A5):
+    state = (A1, A2, A3, A4, A5)
+    if state in states:
+        return states[state]
+    else:
+        return "STOP"
+
+
+def drive(left, right):
+    if left < 0:
+        motorL.backward(abs(left)+20)
+        time.sleep_ms(10)
+        motorL.backward(abs(left))
+    else:
+        # motorL.forward(abs(left)+20)
+        # time.sleep_ms(10)
+        motorL.forward(abs(left))
+
+    if right < 0:
+        motorR.backward(abs(right)+20)
+        time.sleep_ms(10)
+        motorR.backward(abs(right))
+    else:
+        # motorR.forward(abs(right)+20)
+        # time.sleep_ms(10)
+        motorR.forward(abs(right))
+
+
+currentState = STATES[0]
+movements = []
+steps = 0
+leftSpeed, rightSpeed = 0, 0
+prevReadings: list[int] = [0, 0, 0, 0, 0]
+lastSeen = [0, 0, 0, 0, 0]
+# left,right = 0,0
+e_acc, e_prev = 0, 0
+
+median_filter = MedianFilter(window_size=10)
+
+def PID(e, e_acc, e_prev, delta_t, kp=1.0, kd=0.0, ki=0):
+    P = kp * e
+    I = e_acc + ki * e * delta_t
+    D = kd * (e - e_prev) / delta_t
+
+    return e, I, P + I + D
+
+A1B, A2B, A3B, A4B, A5B = 0, 0, 0, 0, 0
+last = 0
+
+box_detected, objects = False, 0
 
 while True:
-    degAngleL = MASL.toDeg(ASL.RAWANGLE)
-    totalAngleL = MASL.checkQuadrant(degAngleL)
-    posL = totalAngleL / 0.45
+    sensors = LINE.read()
+    sensorsByBool = toInts(sensors)
+    [A1, A2, A3, A4, A5] = sensorsByBool
 
-    degAngleR = MASR.toDeg(ASR.RAWANGLE)
-    totalAngleR = MASR.checkQuadrant(degAngleR)
-    posR = totalAngleR / 0.45
+    currentState = control_robot(A1, A2, A3, A4, A5)
+    median_filter.update(SONIC.distance_cm())
 
-    setpoint = 2000
-    errL = (setpoint - posL)
-    errR = (setpoint - posR)
+    distance = median_filter.get_median()
+    #
+    if distance < 25 and not SWITCH.value():
+        box_detected = True
+        print("OBJECT!, COLOR: "+ str(TCS.rgb()))
+        objects = 1
+        currentState = STATES[0]
+        MAGNET.value(1)
+
+    elif distance < 15 and SWITCH.value():
+        print("Not a box object, turning")
+
+        [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+        while (not A2B) or (not A3B):
+            drive(-50, 60)
+            [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+
+        median_filter.values = [ 120,120,120,120,120,120,120,120,120,120 ]
+        currentState = STATES[0]
+
+    if not SWITCH.value():
+        box_detected = False
+
+    if currentState == "STOP":
+        leftSpeed = 0
+        rightSpeed = 0
+
+    if currentState == STATES[0]:
+        MovingAverage = -2 * sensors[0] - 1 * sensors[1] + 0 * sensors[2] + 1 * sensors[3] + 2 * sensors[4]
+        e_prev, e_acc, output = PID(MovingAverage / 100, e_acc, e_prev, time.ticks_diff(time.ticks_ms(), last) / 1000,
+                                    7, 0, 0)
+        last = time.ticks_ms()
+        e_acc, e_prev = e_acc, e_prev
+
+        # x = 50 if SWITCH.value() else 60
+        # x *= 1.7 if SWITCH.value() else 1
+        x = 50
+        leftSpeed = x - output
+        rightSpeed = x + output
 
 
-    print(
-        f" \n\
-        Deg: {degAngleL} \t {degAngleR} \n\
-        Angle: {totalAngleL} \t {totalAngleR}\n\
-        Pos: {posL} \t {posR} \n\
-        "
-    )
+    elif currentState == STATES[1]:
+        drive(40, 40)
+        time.sleep(0.5)
+        drive(0, 0)
 
+        [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+        while (not A2B) or (not A3B):
+            drive(-50, 60)
+            [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+
+        leftSpeed = 0
+        rightSpeed = 0
+
+    elif currentState == STATES[2]:
+        drive(40, 40)
+        time.sleep(0.5)
+        drive(0, 0)
+
+        [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+        while (not A4B) or (not A5B):
+            drive(60, -50)
+            [A1B, A2B, A3B, A4B, A5B] = toInts(LINE.read())
+
+        leftSpeed = 0
+        rightSpeed = 0
+
+    drive(leftSpeed, rightSpeed)
+    print(f"{currentState} {sensors} {distance}")
+    prevReadings = sensors
     # time.sleep(0.2)
-
-# import uasyncio as a
-# import network
-#
-# ws = AsyncWebsocketClient(3000)
-#
-# lock = a.Lock()
-# data_from_ws = []
-
-# async def connectToWifi():
-#     wifi = network.WLAN(network.STA_IF)
-#     wifi.active(1)
-#
-#     while not wifi.isconnected():
-#         print("Wifi connecting.. ")
-#
-#         if wifi.status() != network.STAT_CONNECTING:
-#             wifi.connect(SSID, PASSWORD)
-#
-#         await a.sleep(0.4)
-#
-#     if wifi.isconnected():
-#         print("ifconfig: {}".format(wifi.ifconfig()))
-#     else:
-#         print("Wifi not connected.")
-#
-#     return wifi
-
-# p2 = Pin(2, Pin.OUT)
-# async def blink_sos():
-#     global p2
-#
-#     async def blink(on_ms: int, off_ms: int):
-#         p2.on()
-#         await a.sleep_ms(on_ms)
-#         p2.off()
-#         await a.sleep_ms(off_ms)
-#
-#     await blink(200, 50)
-#     await blink(200, 50)
-#     await blink(200, 50)
-#     await blink(400, 50)
-#     await blink(400, 50)
-#     await blink(400, 50)
-#     await blink(200, 50)
-#     await blink(200, 50)
-#     await blink(200, 50)
-#
-#
-# async def blink_loop():
-#     global lock
-#     global data_from_ws
-#     global ws
-#
-#     # Main "work" cycle. It should be awaitable as possible.
-#     while True:
-#         # await blink_sos()
-#         if ws is not None:
-#             if await ws.open():
-#                 await ws.send('SOS!')
-#                 print("SOS!", end=' ')
-#
-#             # lock data archive
-#             await lock.acquire()
-#             if data_from_ws:
-#                 for item in data_from_ws:
-#                     print("\nData from ws: {}".format(item))
-#                 data_from_ws = []
-#             lock.release()
-#             gc.collect()
-#
-#         await a.sleep_ms(400)
-#
-# async def read_loop():
-#     global config
-#     global lock
-#     global data_from_ws
-#
-#     # may be, it
-#     wifi = await connectToWifi()
-#     while True:
-#         gc.collect()
-#         if not wifi.isconnected():
-#             wifi = await connectToWifi()
-#             if not wifi.isconnected():
-#                 await a.sleep_ms(4000)
-#                 continue
-#         try:
-#             print("Handshaking...")
-#
-#             # connect to test socket server with random client number
-#             if not await ws.handshake("{}{}".format(f"ws://{wifi.ifconfig()[2]}:8000/", randint(1, 100))):
-#                 raise Exception('Handshake error.')
-#             print("...handshaked.")
-#             mes_count = 0
-#             while await ws.open():
-#                 data = await ws.recv()
-#                 print("Data: " + str(data) + "; ")
-#                 # ?lose socket for every 10 messages (even ping/pong)
-#                 if mes_count == 10:
-#                     await ws.close()
-#                     print("ws is open: " + str(await ws.open()))
-#                 mes_count += 1
-#                 if data is not None:
-#                     await lock.acquire()
-#                     data_from_ws.append(data)
-#                     lock.release()
-#
-#                 await a.sleep_ms(50)
-#         except Exception as ex:
-#             print("Exception: {}".format(ex))
-#             await a.sleep(1)
-# async def main():
-#     tasks = [read_loop(), blink_loop()]
-#     await a.gather(*tasks)
-
-# s
