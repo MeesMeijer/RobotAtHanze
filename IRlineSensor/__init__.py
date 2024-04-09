@@ -6,6 +6,24 @@ def normalize(x: int):
     in_max, out_max = 65535, 1000
     return (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
 
+
+class readData:
+    def __init__(self, data):
+        self.data = data
+        # [A1, A2, A3, A4, A5] = data
+
+    def __str__(self):
+        return f"{self.data}"
+
+    def __getitem__(self, item: int):
+        if type(item) is type(int()):
+            return self.data[item]
+        raise Exception("Only supports types of ints!")
+
+    def toBooleans(self, whiteThreshold: int) -> list[bool]:
+        return [bool(x < whiteThreshold) for x in self.data]
+
+
 class LineSensor:
     def __init__(self, A1: Pin, A2: Pin, A3: Pin, A4: Pin, A5: Pin):
         self.A1 = ADC(A1, atten=ADC.ATTN_11DB)
@@ -14,16 +32,16 @@ class LineSensor:
         self.A4 = ADC(A4, atten=ADC.ATTN_11DB)
         self.A5 = ADC(A5, atten=ADC.ATTN_11DB)
 
-    def read(self) -> list[int]:
-        """Read between A1-A5 LOWER = BLACK """
+    def read(self) -> readData:
+        """Read between A1-A5 LOWER = BLACK 0-1000 """
 
-        return [
+        return readData([
             normalize(self.A1.read_u16()),
             normalize(self.A2.read_u16()),
             normalize(self.A3.read_u16()),
             normalize(self.A4.read_u16()),
             normalize(self.A5.read_u16())
-        ]
+        ])
 
     def readRaw(self) -> list[float]:
         """Read between A1-A5"""

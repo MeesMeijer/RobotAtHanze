@@ -1,7 +1,5 @@
 import time
-
 import machine
-
 from MCP23017 import MCP23017
 from machine import Pin
 
@@ -25,7 +23,7 @@ class TCS3200:
         self._MCP.pin(self.S2, value=color[0])
         self._MCP.pin(self.S3, value=color[1])
 
-        time.sleep(0.2)
+        time.sleep(0.1)
         start = time.ticks_us()
         for _ in range(self.cyles):
             machine.time_pulse_us(self.OUT, 0)
@@ -41,3 +39,8 @@ class TCS3200:
             self.get(self.GREEN),
             self.get(self.BLUE),
         )
+
+    def detectColor(self):
+        colors = ["Red", "Green", "Blue"]
+        values = self.rgb()
+        return colors[values.index(max(values))]
