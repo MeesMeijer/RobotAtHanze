@@ -13,7 +13,7 @@ class PID:
         self._Kd = D  # (p-1)*10
         self._lastCalc = time.ticks_ms()
 
-    def calc(self, data):
+    def calc(self, data) -> float:
         delta_t = time.ticks_diff(time.ticks_ms(), self._lastCalc) / 1000
         P = self._Kp * data
         I = self._i + self._Ki * data * delta_t

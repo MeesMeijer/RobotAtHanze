@@ -66,3 +66,5 @@ class MotorDriver:
             rightSpeed = self.__sign(rightSpeed) * self.__maxSpeed * ratio
             leftSpeed = self.__sign(leftSpeed) * self.__maxSpeed
             return leftSpeed, rightSpeed
+
+        return leftSpeed, rightSpeed

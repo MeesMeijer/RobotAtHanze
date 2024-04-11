@@ -8,7 +8,7 @@ from docopt import docopt
 from ampy.pyboard import Pyboard
 from ampy.files import Files, DirectoryExistsError
 
-port = "COM6"
+port = "COM3"
 
 board = Pyboard(port)
 files = Files(board)
@@ -30,7 +30,7 @@ def isDir(name):
     return False
 
 def isFile(name):
-    if name.endswith('.py') and name not in ["boot.py", "myupload.py", "upload.py", "__pycache__", "micropython-test.iml"]:
+    if name.endswith('.py') and name not in ["server.py", "mapping.py","boot.py", "myupload.py", "upload.py", "__pycache__", "micropython-test.iml"]:
         return True
     return False
 
@@ -50,6 +50,7 @@ for item in os.listdir(PROJECT_PATH):
 
 print("Found ", len(toAddDirss), "dirs")
 print("Found ", len(toAddFiles), "files")
+print(files.ls("/"))
 
 for ldir in toAddDirss:
     print("mkdir", ldir)

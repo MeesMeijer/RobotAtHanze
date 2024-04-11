@@ -13,9 +13,11 @@ from motors.driver import MotorDriver
 from filters import MedianFilter
 from PID import PID
 from statemachine import States
+from requests import request
+import uheapq
 
 frequency = 15000
-WHITE_THRESHOLD = 700
+WHITE_THRESHOLD = 770
 
 I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
@@ -90,7 +92,7 @@ getState = States(States.STOP)
 
 leftSpeed, rightSpeed = 0, 0
 
-prevReadings: list[int] = [0, 0, 0, 0, 0]
+prevReadings: list[bool] = [False, False, False, False, False]
 lastSeen = [0, 0, 0, 0, 0]
 nextState = None
 
@@ -102,20 +104,52 @@ while True:
     sensorsByBooleans = [D1, D2, D3, D4, D5] = lineSensorData.toBooleans(WHITE_THRESHOLD)
 
     # UPDATE currentState with the IR sensor data
-    currentState = nextState if nextState else getState[sensorsByBooleans]
+    sensorState = getState[sensorsByBooleans]
+
+    if nextState is not None:
+        currentState = nextState
+    else:
+        currentState = sensorState
+
+    temp: list[int] = [0,0,0,0,0]
+    for i in range(len(prevReadings)):
+        ixs = sensorsByBooleans[i]
+        ixps = prevReadings[i]
+
+        if ixps and not ixs:
+            lastSeen[i] = time.ticks_ms()
+            temp[i] = 1
+
+        if not ixps and not ixs:
+            lastSeen[i] = -1
+
 
     # Update / get the Median filter with new data
     SONIC_FILTER.update(SONIC.distance_cm())
     distance = SONIC_FILTER.get_median()
 
-    if distance < 20 and not SWITCH.value():
-        print("OBJECT!, COLOR: " + str(TCS.detectColor()))
-        currentState = States.PICK_UP_BOX
+    tempStates = {
+        (1,0,0,0,0): States.LEFT_CORNER,
+        (1,1,0,0,0): States.LEFT_CORNER,
+        (1,1,1,0,0): States.LEFT_CORNER,
+        (0,0,0,0,1): States.RIGHT_CORNER,
+        (0,0,0,1,1): States.RIGHT_CORNER,
+        (0,0,1,1,1): States.RIGHT_CORNER
+    }
 
-    elif distance < 20 and SWITCH.value():
-        print("Not a box, turning")
-        currentState = States.OBSTACLE
 
+
+    # if (tempState := tempStates[(tuple(temp))]) != States.STOP:
+    #     currentState = tempState
+
+
+    # if distance < 20 and not SWITCH.value():
+    #     print("OBJECT!, COLOR: " + str(TCS.detectColor()))
+    #     currentState = States.PICK_UP_BOX
+    #
+    # elif distance < 20 and SWITCH.value():
+    #     print("Not a box, turning")
+    #     currentState = States.OBSTACLE
 
     if currentState == States.STOP:
         leftSpeed = 0
@@ -123,13 +157,14 @@ while True:
 
     elif currentState == States.STRAIGHT:
         # TODO: Check the MAPPING
-        MovingAverage = -2 * A1 - 1 * A2 + 0 * A3 + 1 * A4 + 2 * A5
-        output = PID.calc(MovingAverage / sum(MovingAverage))
-
+        MovingAverage = -2.5 * A1 - 2 * A2 + 0 * A3 + 2 * A4 + 2.5 * A5
+        output = PID.calc(MovingAverage / 200)
+        # print("pid", output)
         x = 50
         leftSpeed = x - output
         rightSpeed = x + output
 
+        # nextState = getState[LINE.read().toBooleans(WHITE_THRESHOLD)]
         nextState = None
 
     elif currentState == States.LEFT_CORNER:
@@ -141,11 +176,11 @@ while True:
 
         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
         # lineData[n] == An+1 so An == lineData[n-1]
-        while (not lineData[1]) or (not lineData[2]):
-            DRIVER.drive(-40, 50)
+        while not lineData[2]:
+            DRIVER.drive(-25, 20)
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
 
-        nextState = States.STRAIGHT
+        nextState = None
 
     elif currentState == States.RIGHT_CORNER:
         # TODO: Check the MAPPING
@@ -154,11 +189,11 @@ while True:
         DRIVER.drive(0, 0)
 
         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        while (not lineData[3]) or (not lineData[4]):
-            DRIVER.drive(50, -40)
+        while not lineData[2]:
+            DRIVER.drive(20, -25)
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
 
-        nextState = States.STRAIGHT
+        nextState = None
 
     elif currentState == States.OBSTACLE:
         # TODO: Check the MAPPING
@@ -173,7 +208,10 @@ while True:
         while (not lineData[1]) or (not lineData[2]):
             DRIVER.drive(-40, 50)
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        SONIC_FILTER.reset(120) # this is to not trick the if statement
+
+        for _ in range(9):
+            SONIC_FILTER.update(120)
+        # SONIC_FILTER.reset(120) # this is to not trick the if statement
 
         nextState = States.STRAIGHT
 
@@ -183,7 +221,7 @@ while True:
         MAGNET.value(1)  # Enable the magnet.
 
         MovingAverage = -2 * A1 - 1 * A2 + 0 * A3 + 1 * A4 + 2 * A5
-        output = PID.calc(MovingAverage / sum(MovingAverage))
+        output = PID.calc(MovingAverage / 200)
 
         x = 30
         leftSpeed = x - output
@@ -193,15 +231,21 @@ while True:
 
         if SWITCH.value():
             print("Got the box!, COLOR: " + TCS.detectColor())
+            for _ in range(9):
+                SONIC_FILTER.update(120)
             nextState = States.TURN_AROUND
 
         # nextState = States.PICK_UP_BOX if not SWITCH.value() else States.TURN_AROUND
 
-    DRIVER.drive(leftSpeed, rightSpeed)
-    print(f"Current State:\t{currentState} \n"
-          f"Next State:\t{nextState}\n"
-          f"Line sensor:\t{lineSensorData} \n "
-          f"Distance:\t{distance}")
+    tempState = tempStates.get(tuple(temp))
+    if tempState and not nextState and currentState == States.STOP:
+        nextState = tempState
 
-    # prevReadings = sensors
+    DRIVER.drive(leftSpeed, rightSpeed)
+    print(f"{currentState} {nextState} {tempState} {lineSensorData} {distance} {lastSeen}")
+    # print(f"C: {currentState} N: {nextState} S: {sensorState}\n",
+    #       f"LSB: {sensorsByBooleans} LS: {lineSensorData} \n ",
+    #       f"Distance: {distance}")
+
+    prevReadings = sensorsByBooleans
     # time.sleep(0.2)
