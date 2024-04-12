@@ -15,6 +15,12 @@ class Length:
     x13 = 1 / 3
     x16 = 1 / 6
 
+class BoxPlaces:
+    RED = "Y"
+    BLUE = "AA"
+    BLACK =  "X"
+    GREEN = "Z"
+
 
 nodes: dict[str, dict[str, list[float, str]]] = {
     "A": {
