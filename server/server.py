@@ -21,15 +21,22 @@ def homepage():
 @app.route("/robotPos/<pos>", methods=["GET", "POST"])
 def robotPos(pos: str = None):
     global ROBOT_POS, PREVIOUS_POSSES
-
-    # if we have a pos, and the pos is valid..
-    if pos and nodes.get(pos):
-        ROBOT_POS = pos
-        PREVIOUS_POSSES.append(pos)
-
+    if not pos:
         return jsonify({"error": False, "pos": ROBOT_POS})
 
-    return jsonify({"error": False, "pos": ROBOT_POS})
+    if pos.find(":") == -1:
+        return jsonify({
+            "error": True,
+            "message": "Invalid position format. A:E or B:F"
+        })
+
+    a, b = pos.split(":")
+    if nodes.get(a) and nodes.get(a).get(b):
+        ROBOT_POS = pos
+        PREVIOUS_POSSES.append(pos)
+        return jsonify({"error": False, "pos": ROBOT_POS})
+
+    return jsonify({"error": True, "message": "Invalid position. "})
 
 
 # fromTo => .split(":") -> fromTO[0] -> Start fromTo[1] -> End bv: A:AA
@@ -77,5 +84,6 @@ def test_disconnect():
 
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, host="192.168.2.7", port=5000, debug=True)
+
 

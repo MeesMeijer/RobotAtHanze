@@ -68,7 +68,6 @@ def checkI2CDevices():
     devicesA = I2CA.scan()
     devicesB = I2CB.scan()
 
-    # TODO: Check if this works
     print("DEBUGA", [hex(d) for d in devicesA])
     print("DEBUGB", [hex(dc) for dc in devicesB])
 
@@ -111,7 +110,7 @@ while True:
     else:
         currentState = sensorState
 
-    temp: list[int] = [0,0,0,0,0]
+    temp: list[int] = [0, 0, 0, 0, 0]
     for i in range(len(prevReadings)):
         ixs = sensorsByBooleans[i]
         ixps = prevReadings[i]
@@ -137,11 +136,8 @@ while True:
         (0,0,1,1,1): States.RIGHT_CORNER
     }
 
-
-
     # if (tempState := tempStates[(tuple(temp))]) != States.STOP:
     #     currentState = tempState
-
 
     # if distance < 20 and not SWITCH.value():
     #     print("OBJECT!, COLOR: " + str(TCS.detectColor()))
@@ -151,6 +147,7 @@ while True:
     #     print("Not a box, turning")
     #     currentState = States.OBSTACLE
 
+    #Statemachine
     if currentState == States.STOP:
         leftSpeed = 0
         rightSpeed = 0
