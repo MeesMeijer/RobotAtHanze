@@ -218,9 +218,19 @@ class Graph:
         shortest_path = paths[end] + [end]
         return shortest_distance, shortest_path
 
+    def BlockConnection(self, A: str, B: str):
+        self.nodes[A][B][0] = 1e25
+        self.nodes[B][A][0] = 1e25
 
 graph = Graph(nodes)
-nodes["I"]["K"][0] = 1e6
+
+graph.BlockConnection("K", "N")
+graph.BlockConnection("N", "Q")
+graph.BlockConnection("J", "L")
+graph.BlockConnection("O", "W")
+graph.BlockConnection("E", "M")
+graph.BlockConnection("R", "S")
+
 # Example usage: find the shortest distance between nodes "A" and "Z"
 start_node = "A"
 end_node = "Z"
