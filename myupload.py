@@ -25,7 +25,7 @@ PROJECT_PATH = os.getcwd()
 # remoteDirs = [path.removeprefix("/") for path in remoteRootFiles if path.find(".") == -1]
 
 def isDir(name):
-    if name.find(".") == -1 and name not in ["venv", "__pycache__"]:
+    if name.find(".") == -1 and name not in ["venv", "__pycache__", "testdirs"]:
         return True
     return False
 

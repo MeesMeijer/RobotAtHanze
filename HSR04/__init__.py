@@ -76,11 +76,9 @@ class HCSR04:
         return self.zero(cms)
 
     def zero(self, cms):
-
         """ return the distance as a result of the calibration """
         # the function from the calibration: y = 0,9673x + 0.1187
 
-        # TODO: Calibrate
         return (cms - 0.1187)/0.9673
 
 

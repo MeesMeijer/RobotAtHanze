@@ -73,6 +73,8 @@ def calcPath(fromTo: str, blocks: str = None):
         },
     })
 
+
+socketio
 @socketio.on('connect')
 def test_connect(auth):
     emit('my response', {'data': 'Connected'})

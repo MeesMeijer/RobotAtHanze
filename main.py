@@ -245,4 +245,4 @@ while True:
     #       f"Distance: {distance}")
 
     prevReadings = sensorsByBooleans
-    # time.sleep(0.2)
+    time.sleep_ms(50)
