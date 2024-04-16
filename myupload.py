@@ -25,18 +25,19 @@ PROJECT_PATH = os.getcwd()
 # remoteDirs = [path.removeprefix("/") for path in remoteRootFiles if path.find(".") == -1]
 
 def isDir(name):
-    if name.find(".") == -1 and name not in ["venv", "__pycache__", "testdirs"]:
+    if name.find(".") == -1 and name not in ["venv", "__pycache__", "testdirs", "server"]:
         return True
     return False
 
 def isFile(name):
-    if name.endswith('.py') and name not in ["server.py", "mapping.py","boot.py", "myupload.py", "upload.py", "__pycache__", "micropython-test.iml"]:
+    if name.endswith('.py') and name not in ["server.py","boot.py", "myupload.py", "upload.py", "__pycache__", "micropython-test.iml"]:
         return True
     return False
 
 
 toAddFiles, toAddDirss = [], []
 for item in os.listdir(PROJECT_PATH):
+    print(item)
     if isDir(item):
         toAddDirss.append(f"/{item}")
         for i in os.listdir(f"{PROJECT_PATH}/{item}"):
