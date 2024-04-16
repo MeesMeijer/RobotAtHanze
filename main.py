@@ -13,11 +13,10 @@ from motors.driver import MotorDriver
 from filters import MedianFilter
 from PID import PID
 from statemachine import States
-from requests import request
-import uheapq
+from mapping import Heading, Graph, nodes, Length, BoxPlaces
 
 frequency = 15000
-WHITE_THRESHOLD = 770
+WHITE_THRESHOLD = 950
 
 I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
@@ -32,7 +31,7 @@ ASR = AS5600(I2CA, 0x36)
 # MASR = ASMethods(ASR.RAWANGLE)
 
 SONIC = HCSR04(echo_pin=ECHO, trigger_pin=TRIG)
-LINE = LineSensor(Pin(A2, Pin.IN), Pin(A2, Pin.IN), Pin(A3, Pin.IN), Pin(A4, Pin.IN), Pin(A5, Pin.IN))
+LINE = LineSensor(Pin(A1, Pin.IN), Pin(A2, Pin.IN), Pin(A3, Pin.IN), Pin(A4, Pin.IN), Pin(A5, Pin.IN))
 
 SWITCH = Pin(LIMIT_SWITCH, Pin.IN)
 MAGNET = Pin(TRIG_MAGNET, Pin.OUT, value=0)
@@ -57,7 +56,7 @@ DRIVER = MotorDriver(leftMotor, rightMotor)
 # Color sensor
 TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
-PID = PID(3, 0, 0)
+PID = PID(4, 0, 0)
 SONIC_FILTER = MedianFilter(window_size=10)
 
 
@@ -95,20 +94,56 @@ prevReadings: list[bool] = [False, False, False, False, False]
 lastSeen = [0, 0, 0, 0, 0]
 nextState = None
 
+#TODO: Make this Dynamic
+currentHeading = Heading.EAST
+currentPos = "R"
+currentEndgoal = "X"
+
+graph = Graph(nodes)
+
+currentCost, currentPath, currentDirections = graph.dijkstra(currentPos, currentEndgoal)
+prevDirections = []
+nextDir = 0
+
+#   N
+# W   E
+#   S
+
+
+dictHeadings = {
+    Heading.EAST: {
+        Heading.NORTH: States.LEFT_CORNER,
+        Heading.SOUTH: States.RIGHT_CORNER,
+        Heading.WEST: States.TURN_AROUND,
+        Heading.EAST: States.STRAIGHT
+    },
+    Heading.NORTH: {
+        Heading.NORTH: States.STRAIGHT,
+        Heading.SOUTH: States.TURN_AROUND,
+        Heading.WEST: States.LEFT_CORNER,
+        Heading.EAST: States.RIGHT_CORNER
+    },
+    Heading.WEST: {
+        Heading.NORTH: States.RIGHT_CORNER,
+        Heading.SOUTH: States.LEFT_CORNER,
+        Heading.WEST: States.STRAIGHT,
+        Heading.EAST: States.TURN_AROUND
+    },
+    Heading.SOUTH: {
+        Heading.NORTH: States.TURN_AROUND,
+        Heading.SOUTH: States.STRAIGHT,
+        Heading.WEST: States.RIGHT_CORNER,
+        Heading.EAST: States.LEFT_CORNER
+    }
+}
+print(currentPath, currentDirections)
 while True:
     # Read the IR sensor data and make it Digital
     # A1...A5 == Analog pin 1..5
     # D1...D5 == The digital representation with WHITE_THRESHOLD
     lineSensorData = [A1, A2, A3, A4, A5] = LINE.read()
+
     sensorsByBooleans = [D1, D2, D3, D4, D5] = lineSensorData.toBooleans(WHITE_THRESHOLD)
-
-    # UPDATE currentState with the IR sensor data
-    sensorState = getState[sensorsByBooleans]
-
-    if nextState is not None:
-        currentState = nextState
-    else:
-        currentState = sensorState
 
     temp: list[int] = [0, 0, 0, 0, 0]
     for i in range(len(prevReadings)):
@@ -120,7 +155,62 @@ while True:
             temp[i] = 1
 
         if not ixps and not ixs:
-            lastSeen[i] = -1
+            lastSeen[i] = 0
+            temp[i] = 0
+
+    # UPDATE currentState with the IR sensor data
+    sensorState = getState[sensorsByBooleans]
+
+    if nextState is not None:
+        currentState = nextState
+    else:
+        currentState = sensorState
+
+    # if currentState in [States.LEFT_CORNER, States.RIGHT_CORNER, States.T_CROSS]:
+    #     desiredHeading = currentDirections[nextDir]
+    #     desiredState = dictHeadings[currentHeading][desiredHeading]
+    #     nextDir += 1
+    #
+    #     if nextDir > len(currentDirections) :
+    #         print("Reight end of path.. ")
+    #         nextDir = len(currentDirections) -1
+    #
+    #     currentPos = currentPath[nextDir]
+    #     currentHeading = desiredHeading
+    #     currentState = States.STRAIGHT
+    #     nextState = desiredState
+
+    if nextDir == (len(currentDirections)+1):
+        currentState = States.STOP
+        # nextDir = len(currentDirections) -1
+        print("at end")
+    # DRIVER.drive(50,50)
+    #
+    if nextDir:
+        currentPos = currentPath[nextDir -1]
+    else:
+        currentPos = currentPath[nextDir]
+    # currentHeading
+        # if nextDir == len(currentDirections) :
+        #     currentState = States.STOP
+
+    #
+    #
+
+    # turns = [ States.LEFT_CORNER, States.RIGHT_CORNER]
+    # if currentState in turns:
+    #     # check if this is right
+    #     if desiredState != currentState:
+    #         currentState = desiredState
+    #         nextDir += 1
+    #
+    #
+    #         currentPos = currentPath[nextDir]
+    #
+    # print(f"CP: {currentPos} CH: {currentHeading}, DH: {desiredHeading}, DS: {desiredState}")
+    # currentState = desiredState
+
+
 
 
     # Update / get the Median filter with new data
@@ -131,6 +221,7 @@ while True:
         (1,0,0,0,0): States.LEFT_CORNER,
         (1,1,0,0,0): States.LEFT_CORNER,
         (1,1,1,0,0): States.LEFT_CORNER,
+
         (0,0,0,0,1): States.RIGHT_CORNER,
         (0,0,0,1,1): States.RIGHT_CORNER,
         (0,0,1,1,1): States.RIGHT_CORNER
@@ -155,8 +246,8 @@ while True:
     elif currentState == States.STRAIGHT:
         # TODO: Check the MAPPING
         MovingAverage = -2.5 * A1 - 2 * A2 + 0 * A3 + 2 * A4 + 2.5 * A5
-        output = PID.calc(MovingAverage / 200)
-        # print("pid", output)
+        output = PID.calc(MovingAverage / 30)
+
         x = 50
         leftSpeed = x - output
         rightSpeed = x + output
@@ -165,32 +256,71 @@ while True:
         nextState = None
 
     elif currentState == States.LEFT_CORNER:
-        # TODO: Check the MAPPING
+        # TODO: nextState()
+        desiredHeading = currentDirections[nextDir+1]
+        desiredState = dictHeadings[currentHeading][desiredHeading]
 
-        DRIVER.drive(40, 40)
-        time.sleep(0.5)
-        DRIVER.drive(0, 0)
+        if currentState != desiredState:
+            nextState = desiredState
+            currentHeading = desiredHeading
+            nextDir += 1
+        else:
 
-        lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        # lineData[n] == An+1 so An == lineData[n-1]
-        while not lineData[2]:
-            DRIVER.drive(-25, 20)
+        # nextState = States.STOP
+        # continue
+        # print("yes")
+
+
+            # TODO: Check the MAPPING
+
+            DRIVER.drive(40, 40)
+            time.sleep(0.5)
+            DRIVER.drive(0, 0)
+
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
+            # lineData[n] == An+1 so An == lineData[n-1]
+            while not lineData[2]:
+                DRIVER.drive(-25, 20)
+                lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
 
-        nextState = None
+            nextState = None
 
     elif currentState == States.RIGHT_CORNER:
-        # TODO: Check the MAPPING
-        DRIVER.drive(40, 40)
-        time.sleep(0.5)
-        DRIVER.drive(0, 0)
+        # TODO: nextState()
+        desiredHeading = currentDirections[nextDir]
+        desiredState = dictHeadings[currentHeading][desiredHeading]
+        print(desiredHeading, desiredState)
 
-        lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        while not lineData[2]:
-            DRIVER.drive(20, -25)
+        if currentState != desiredState:
+            # nextState =
+            currentHeading = currentDirections[nextDir+1]
+            nextState = dictHeadings[currentHeading][currentDirections[nextDir+2]]
+            nextDir += 1
+
+        else:
+            # TODO: Check the MAPPING
+            DRIVER.drive(40, 40)
+            time.sleep(0.5)
+            DRIVER.drive(0, 0)
+
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
+            while not lineData[2]:
+                DRIVER.drive(20, -25)
+                lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
 
-        nextState = None
+            nextState = None
+
+    elif currentState == States.T_CROSS:
+        # TODO: nextState()
+        desiredHeading = currentDirections[nextDir+1]
+        desiredState = dictHeadings[currentHeading][desiredHeading]
+
+        # if currentState != desiredState:
+        nextState = desiredState
+        currentHeading = desiredHeading
+        nextDir += 1
+
+        # nextState = States.STOP
 
     elif currentState == States.OBSTACLE:
         # TODO: Check the MAPPING
@@ -217,8 +347,8 @@ while True:
         # TODO: Check the MAPPING
         MAGNET.value(1)  # Enable the magnet.
 
-        MovingAverage = -2 * A1 - 1 * A2 + 0 * A3 + 1 * A4 + 2 * A5
-        output = PID.calc(MovingAverage / 200)
+        MovingAverage = -2.5 * A1 - 2 * A2 + 0 * A3 + 2 * A4 + 2.5 * A5
+        output = PID.calc(MovingAverage / 30)
 
         x = 30
         leftSpeed = x - output
@@ -234,12 +364,15 @@ while True:
 
         # nextState = States.PICK_UP_BOX if not SWITCH.value() else States.TURN_AROUND
 
-    tempState = tempStates.get(tuple(temp))
-    if tempState and not nextState and currentState == States.STOP:
-        nextState = tempState
+    elif currentState == States.GO_TO_GOAL:
+        pass
+
+    # tempState = tempStates.get(tuple(temp))
+    # if tempState and not nextState:
+    #     nextState = tempState
 
     DRIVER.drive(leftSpeed, rightSpeed)
-    print(f"{currentState} {nextState} {tempState} {lineSensorData} {distance} {lastSeen}")
+    print(f"{currentState} {nextState}  {sensorsByBooleans} {currentPos} {currentHeading} {nextDir} {len(currentDirections)} {len(currentPath)}")
     # print(f"C: {currentState} N: {nextState} S: {sensorState}\n",
     #       f"LSB: {sensorsByBooleans} LS: {lineSensorData} \n ",
     #       f"Distance: {distance}")
