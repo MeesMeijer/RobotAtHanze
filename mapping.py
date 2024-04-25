@@ -6,11 +6,22 @@ except ImportError:
 
 
 class Heading:
+    __reversed = False
+
     NORTH = "N"
     SOUTH = "S"
     WEST = "W"
     EAST = "E"
 
+    def __init__(self, reversed: bool = False):
+        self.reverse(reversed)
+
+    def reverse(self, state: bool):
+        self.__reversed = state
+        self.NORTH = "N" if not state else "S"
+        self.SOUTH = "S" if not state else "N"
+        self.WEST = "W" if not state else "E"
+        self.EAST = "E" if not state else "W"
 
 class Length:
     x = 1
@@ -41,20 +52,20 @@ nodes: dict[str, dict[str, list[float, str]]] = {
     "E": {
         "F": [Length.x16, Heading.EAST],
         "M": [Length.x12, Heading.NORTH],
-        "A": [Length.x13, Heading.SOUTH]
+        "A": [Length.x13, Heading.NORTH]
     },
     "F": {
-        "B": [Length.x13, Heading.SOUTH],
+        "B": [Length.x13, Heading.NORTH],
         "E": [Length.x16, Heading.WEST],
         "G": [Length.x16, Heading.EAST]
     },
     "G": {
         "F": [Length.x16, Heading.WEST],
-        "C": [Length.x13, Heading.SOUTH],
+        "C": [Length.x13, Heading.NORTH],
         "H": [Length.x16, Heading.EAST]
     },
     "H": {
-        "D": [Length.x13, Heading.SOUTH],
+        "D": [Length.x13, Heading.NORTH],
         "G": [Length.x16, Heading.WEST],
         "I": [Length.x13, Heading.EAST]
     },

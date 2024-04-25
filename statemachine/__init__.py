@@ -9,23 +9,25 @@ class States:
     TURN_AROUND = "TURN_AROUND"
     PICK_UP_BOX = "PICK_UP_BOX"
     GO_TO_GOAL = "GO_TO_GOAL"
+    AT_GOAL = "AT_GOAL"
 
     statesByBooleans = {
-        (0, 0, 1,  0, 0):  STRAIGHT,      # (0, 0, 1, 0, 0)
-        (0, 1,  0, 0, 0):  STRAIGHT,      # (0, 1, 0, 0, 0)
-        (0, 0, 0, 1,  0):  STRAIGHT,      # (0, 0, 0, 1, 0)
-        (0, 1,  1,  0, 0):  STRAIGHT,      # (0, 1, 1, 0, 0)
-        (0, 0, 1,  1,  0):  STRAIGHT,      # (0, 0, 1, 1, 0)
-        (0, 1,  1,  1,  0):  STRAIGHT,      # (0 ,1, 1, 1, 0)
-        # (0, 0, 0, 1,  1):   STRAIGHT,      # (0, 0, 0, 1, 1)
-        # (1,  1,  0, 0, 0):  STRAIGHT,      # (1, 1, 0, 0, 0)
-        # (1,  1,  1,  0, 0):  STRAIGHT,      # (1, 1, 1, 0, 0)
-        # (1,0,0,0,0): STRAIGHT,
-        # (0,0,0,0,1): STRAIGHT,
-        (0, 0, 1, 1, 1):   RIGHT_CORNER,      # (0, 0, 1, 1, 1)
+        (0, 0, 1, 0, 0):  STRAIGHT,      # (0, 0, 1, 0, 0)
+        (0, 1, 0, 0, 0):  STRAIGHT,      # (0, 1, 0, 0, 0)
+        (0, 0, 0, 1, 0):  STRAIGHT,      # (0, 0, 0, 1, 0)
+        (0, 1, 1, 0, 0):  STRAIGHT,      # (0, 1, 1, 0, 0)
+        (0, 0, 1, 1, 0):  STRAIGHT,      # (0, 0, 1, 1, 0)
+        (0, 1, 1, 1, 0):  STRAIGHT,      # (0 ,1, 1, 1, 0)
+        (0, 0, 0, 1, 1):   STRAIGHT,
+        (1, 1, 0, 0, 0): STRAIGHT,  # (0, 0, 0, 1, 1)
+        (0, 0, 1, 1, 1):  RIGHT_CORNER,      # (1, 1, 0, 0, 0)
+        (1,  1,  1,  0, 0):  LEFT_CORNER,      # (1, 1, 1, 0, 0)
+        (1,0,0,0,0): STRAIGHT,
+        (0,0,0,0,1): STRAIGHT,
+        # (0, 0, 1, 1, 1):   RIGHT_CORNER,      # (0, 0, 1, 1, 1)
         (0, 1, 1, 1, 1):   RIGHT_CORNER,  # (0, 1, 1, 1, 1)
         (1, 1, 1, 1, 0):  LEFT_CORNER,   # (1, 1, 1, 1, 0)
-        (1, 1, 1, 0, 0): LEFT_CORNER,
+        # (1, 1, 1, 0, 0): LEFT_CORNER,
         (0, 0, 0, 0, 0):  STOP,           # (0, 0, 0, 0, 0),
         (1, 1, 1, 1, 1): T_CROSS
     }
