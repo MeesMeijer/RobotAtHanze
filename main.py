@@ -14,6 +14,7 @@ from filters import MedianFilter
 from PID import PID
 from statemachine import States
 from mapping import Heading, Graph, nodes, Length, BoxPlaces
+from coms import Coms
 
 frequency = 15000
 WHITE_THRESHOLD = 850
@@ -59,6 +60,11 @@ TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 PID = PID(4, 0, 0)
 SONIC_FILTER = MedianFilter(window_size=10)
 
+# a com protecol using esp-now
+com = Coms(peer=b'\xc8\xf0\x9e\xf2X\xe8')
+
+# FRONT or BACK Set where to line sensor is placed.
+SENSOR_PLACEMENT = "FRONT"  # or BACK
 
 def checkI2CDevices():
     busB = [0x36]
@@ -157,17 +163,12 @@ tempStates = {
 timeToIntersection = 0
 
 fromTCross = False
-IntersectionBuStraightLeft, IntersectionBuStraightRight = False, False
 IntersectionButStraight = False
 while True:
-    # print(shortestPath, pathDirections)
-
     # Read the IR sensor data and make it Digital
     # A1...A5 == Analog pin 1..5
     # D1...D5 == The digital representation with WHITE_THRESHOLD
     lineSensorData = [A1, A2, A3, A4, A5] = LINE.read()
-    # print(lineSensorData)
-
     sensorsByBooleans = [D1, D2, D3, D4, D5] = lineSensorData.toBooleans(WHITE_THRESHOLD)
 
     temp: list[int] = [0, 0, 0, 0, 0]
@@ -185,7 +186,6 @@ while True:
 
     # UPDATE currentState with the IR sensor data
     sensorState = getState[sensorsByBooleans]
-    # tempState = tempStates.get(tuple(temp))
 
     if nextState is not None:
         currentState, currentPos = nextState, nextPos
@@ -200,56 +200,45 @@ while True:
 
         currentState = sensorState
     # currentState = States.STRAIGHT
-    # if the time to last intersection is smaller then 0.8 sec, then skip this intersection, because its a duble read
-
-    if currentState == States.AT_GOAL:
-        print("At goal")
 
     if posIndx + 1 <= len(shortestPath):
-        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ",lineSensorData, sep="")
+        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
     else:
-        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", nodes[currentPos][shortestPath[posIndx]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ",lineSensorData, sep="")
+        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", nodes[currentPos][shortestPath[posIndx]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
 
-    # currentState = States.STRAIGHT
     # Update / get the Median filter with new data
     SONIC_FILTER.update(SONIC.distance_cm())
     distance = SONIC_FILTER.get_median()
 
-
-    #Statemachine
+    # Statemachine
     if currentState == States.STOP:
         leftSpeed = 0
         rightSpeed = 0
 
-        if posIndx+2 >= len(shortestPath) or posIndx +1 >= len(shortestPath):
-            print("OP BESTEMMING.. "+ currentPos)
-            nextPos, nextHeading, nextState = currentPos, currentHeading, States.STOP
+        if posIndx + 2 >= len(shortestPath) or posIndx + 1 >= len(shortestPath):
+            print("OP BESTEMMING.. " + currentPos)
+            nextPos, nextHeading = currentPos, currentHeading
         nextState = None
 
     elif currentState == States.AT_GOAL:
         leftSpeed = 0
         rightSpeed = 0
 
-        print("OP BESTEMMING.. "+ currentPos)
+        print("ON GOAL.. " + currentPos)
         nextPos, nextHeading, nextState = currentPos, currentHeading, States.AT_GOAL
 
     elif currentState == States.STRAIGHT:
-        # TODO: Check the MAPPING
-        if posIndx +1 >= len(shortestPath):
-            print("OP BESTEMMING.. "+ currentPos)
+        if posIndx + 1 >= len(shortestPath):
+            print("OP BESTEMMING.. " + currentPos)
             nextPos, nextHeading, nextState = currentPos, currentHeading, States.AT_GOAL
         else:
             if IntersectionButStraight:
-                A1, A2, A3,A4, A5 = 900, 900, 450, 900, 900
+                A1, A2, A3, A4, A5 = 800, 800, 450, 800, 800
                 IntersectionButStraight = False
-            # if IntersectionBuStraightLeft:
-            #     A1, A2, = A4, A5
-            # elif IntersectionBuStraightRight:
-            #     A4, A5, = A1, A2
 
             MovingAverage = -2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5
             output = PID.calc(MovingAverage / 80)
-            # print("PID", output)
+
             x = 50
             leftSpeed = x - output
             rightSpeed = x + output
@@ -261,12 +250,12 @@ while True:
 
     elif currentState in [States.LEFT_CORNER, States.RIGHT_CORNER, States.T_CROSS]:
 
-        if posIndx +2 >= len(shortestPath):
-            print("OP BESTEMMING.. "+ shortestPath[posIndx+1])
+        if posIndx + 2 >= len(shortestPath):
+            print("OP BESTEMMING.. " + shortestPath[posIndx+1])
             nextPos, nextHeading, nextState = currentPos, currentHeading, States.AT_GOAL
         else:
-            # only change if
-            if time.ticks_diff(time.ticks_ms(), timeToIntersection) < 0.2*1000:
+            # TODO: Check if works with the new setup
+            if time.ticks_diff(time.ticks_ms(), timeToIntersection) < 0.5 * 1000:
                 print("this is duplicate", time.ticks_diff(time.ticks_ms(), timeToIntersection))
                 IntersectionBuStraightLeft = True
                 nextPos, nextHeading, nextState = currentPos, currentHeading, States.STRAIGHT
@@ -319,151 +308,8 @@ while True:
 
                 nextPos, nextHeading = shortestPath[posIndx], desiredHeading
 
-    # elif currentState == States.LEFT_CORNER:
-    #     # TODO: nextState()
-    #
-    #     if posIndx +1 >= len(shortestPath):
-    #         # print("OP BESTEMMING.. "+ currentPos)
-    #         nextPos, nextHeading, nextState = currentPos, currentHeading, States.STOP
-    #     else:
-    #         posIndx += 1
-    #         desiredPos = shortestPath[posIndx + 1]
-    #         desiredHeading = nodes[shortestPath[posIndx]][desiredPos][1]
-    #         desiredState = dictHeadings[currentHeading][desiredHeading]
-    #
-    #         print(f"Desired Pos: {desiredPos} Heading: {desiredHeading} State: {desiredState}")
-    #
-    #         if currentState != desiredState:
-    #             print(f"State is: {currentState} But iam going: {desiredState}")
-    #             nextState = desiredState
-    #         else:
-    #             print("turning left ")
-    #
-    #             DRIVER.drive(-25, 20)
-    #             time.sleep(0.4)
-    #             DRIVER.drive(30, 30)
-    #             time.sleep(0.3)
-    #
-    #             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #             # lineData[n] == An+1 so An == lineData[n-1]
-    #             while not lineData[2]:
-    #                 DRIVER.drive(-25, 20)
-    #                 lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #             nextState = States.STRAIGHT
-    #
-    #         nextPos, nextHeading = shortestPath[posIndx], desiredHeading
-    #         fromTCross = False
-    #
-    # elif currentState == States.RIGHT_CORNER:
-    #     # TODO: nextState()
-    #     if posIndx +1 >= len(shortestPath):
-    #         # print("OP BESTEMMING.. "+ currentPos)
-    #         nextPos, nextHeading, nextState = currentPos, currentHeading, States.STOP
-    #     else:
-    #         posIndx += 1
-    #         desiredPos = shortestPath[posIndx + 1]
-    #         desiredHeading = nodes[shortestPath[posIndx]][desiredPos][1]
-    #         desiredState = dictHeadings[currentHeading][desiredHeading]
-    #
-    #         print(f"Desired Pos: {desiredPos} Heading: {desiredHeading} State: {desiredState}")
-    #
-    #         if currentState != desiredState:
-    #             print(f"State is: {currentState} But iam going: {desiredState}")
-    #             nextState = desiredState
-    #         else:
-    #             print("turning right")
-    #             DRIVER.drive(-25, 20)
-    #             time.sleep(0.3)
-    #             DRIVER.drive(30, 30)
-    #             time.sleep(0.2)
-    #
-    #             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #             while not lineData[2]:
-    #                 DRIVER.drive(20, -25)
-    #                 lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #
-    #             nextState = States.STRAIGHT
-    #
-    #         nextPos, nextHeading = shortestPath[posIndx], desiredHeading
-    #         fromTCross = False
-    #
-    # elif currentState == States.T_CROSS:
-    #     # TODO: nextState()
-    #     if posIndx >= len(shortestPath) - 1:
-    #         # print("OP BESTEMMING.. " + currentPos)
-    #         nextPos, nextHeading, nextState = currentPos, currentHeading, States.STOP
-    #
-    #     else:
-    #         posIndx += 1
-    #         desiredPos = shortestPath[posIndx + 1]
-    #         desiredHeading = nodes[shortestPath[posIndx]][desiredPos][1]
-    #         desiredState = dictHeadings[currentHeading][desiredHeading]
-    #
-    #
-    #         print(f"Desired Pos: {desiredPos} Heading: {desiredHeading} State: {desiredState}")
-    #
-    #         nextPos, nextHeading, nextState = shortestPath[posIndx], desiredHeading, desiredState
-    #         fromTCross = True
-    #         print(f"State is: {currentState} But iam going: {desiredState}")
-    #
-    #
-    # # nextState = States.STOP
-    #
-    # elif currentState == States.OBSTACLE:
-    #     # TODO: Check the MAPPING
-    #     # [TODO]: Do something with the information and then go to the next state
-    #
-    #     nextState = States.TURN_AROUND
-    #
-    # elif currentState == States.TURN_AROUND:
-    #     # TODO: Check the MAPPING
-    #     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #     # lineData[x] == A(x+1) so A1 == lineData[0]
-    #     while (not lineData[1]) or (not lineData[2]):
-    #         DRIVER.drive(-40, 50)
-    #         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-    #
-    #     for _ in range(9):
-    #         SONIC_FILTER.update(120)
-    #     # SONIC_FILTER.reset(120) # this is to not trick the if statement
-    #
-    #     nextState = States.STRAIGHT
-    #
-    # # Todo: Check if this works..
-    # elif currentState == States.PICK_UP_BOX:
-    #     # TODO: Check the MAPPING
-    #     MAGNET.value(1)  # Enable the magnet.
-    #
-    #     MovingAverage = -2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5
-    #     output = PID.calc(MovingAverage / 80)
-    #
-    #     x = 30
-    #     leftSpeed = x - output
-    #     rightSpeed = x + output
-    #
-    #     nextState = States.PICK_UP_BOX
-    #
-    #     if SWITCH.value():
-    #         print("Got the box!, COLOR: " + TCS.detectColor())
-    #         for _ in range(9):
-    #             SONIC_FILTER.update(120)
-    #         nextState = States.TURN_AROUND
-    #
-    #     # nextState = States.PICK_UP_BOX if not SWITCH.value() else States.TURN_AROUND
-    #
-    # elif currentState == States.GO_TO_GOAL:
-    #     pass
-
-
-    # if tempState and not nextState:
-    #     nextState = tempState
+    prevReadings = sensorsByBooleans
 
     DRIVER.drive(leftSpeed, rightSpeed)
-    # print(f"Present: Going to: {currentPos} Heading: {currentHeading} State: {currentState}\nNext:    Going To: {nextPos} Heading: {nextHeading} State: {nextState}\n")
-    # print(f"{currentState} {nextState}  {sensorsByBooleans} {currentPos} {currentHeading} {nextDir} {len(currentDirections)} {len(currentPath)}")
-    # print(f"C: {currentState} N: {nextState} S: {sensorState}\n",
-    #       f"LSB: {sensorsByBooleans} LS: {lineSensorData} \n ",
-    #       f"Distance: {distance}")
-
-    prevReadings = sensorsByBooleans
+    # com.send()
     # time.sleep_ms(20)

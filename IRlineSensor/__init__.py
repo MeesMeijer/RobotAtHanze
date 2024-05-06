@@ -2,9 +2,9 @@ from machine import Pin, ADC
 
 
 def normalize(x: int):
-    in_min, out_min = 0, 0
-    in_max, out_max = 65535, 1000
-    return (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
+    return (x - 0) * (1000 - 0) // (65535 - 0) + 0
+
+
 
 
 class readData:

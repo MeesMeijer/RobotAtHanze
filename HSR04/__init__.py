@@ -39,6 +39,7 @@ class HCSR04:
         # Send a 10us pulse.
         time.sleep_us(10)
         self.trigger.value(0)
+
         try:
             pulse_time = machine.time_pulse_us(self.echo, 1, self.echo_timeout_us)
             return pulse_time
