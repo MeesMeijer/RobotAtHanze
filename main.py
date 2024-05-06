@@ -276,29 +276,31 @@ while True:
                 timeToIntersection = time.ticks_ms()
 
                 if desiredState == States.LEFT_CORNER:
-                    print("turning left ")
-                    DRIVER.drive(40, 40)
-                    time.sleep(0.4)
-                    DRIVER.drive(-40, 40)
-                    time.sleep(0.3)
+                    if SENSOR_PLACEMENT == "FRONT":
+                        print("turning left ")
+                        DRIVER.drive(40, 40)
+                        time.sleep(0.4)
+                        DRIVER.drive(-40, 40)
+                        time.sleep(0.3)
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-                    # lineData[n] == An+1 so An == lineData[n-1]
                     while not lineData[3]:
-                        DRIVER.drive(-35, 30)
+                        DRIVER.drive(-40, 40)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
+
                     nextState = States.STRAIGHT
 
                 elif desiredState == States.RIGHT_CORNER:
-                    print("turning right")
-                    DRIVER.drive(40, 40)
-                    time.sleep(0.4)
-                    DRIVER.drive(-40, 40)
-                    time.sleep(0.3)
+                    if SENSOR_PLACEMENT == "FRONT":
+                        print("turning left ")
+                        DRIVER.drive(40, 40)
+                        time.sleep(0.4)
+                        DRIVER.drive(40, -40)
+                        time.sleep(0.3)
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     while not lineData[1]:
-                        DRIVER.drive(30, -35)
+                        DRIVER.drive(40, -40)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
 
                     nextState = States.STRAIGHT
