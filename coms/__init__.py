@@ -31,7 +31,7 @@ class Coms:
             raise Exception("Msg len to big.. max 250")
 
         for p in self.peers:
-            print(f"Sending data packet to {hex(p)}")
+            # print(f"Sending data packet to {bytes(p)}")
             self.esp.send(p, msg)
 
 
