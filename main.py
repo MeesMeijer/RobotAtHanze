@@ -11,7 +11,7 @@ from motors.driver import MotorDriver
 from filters import MedianFilter
 from PID import PID
 from statemachine import States
-from mapping import Heading, Graph, nodes, BoxPlaces
+from mapping import Heading, Graph, nodes, BoxPlaces, HeadingsToState
 from coms import Coms
 
 frequency = 15000
@@ -111,53 +111,10 @@ currentHeading = nodes[shortestPath[posIndx]][shortestPath[posIndx+1]][1]
 nextPos, nextHeading, nextState = None, None, None
 
 
-#   N
-# W   E
-#   S
 
-
-dictHeadings = {
-    Heading.EAST: {
-        Heading.NORTH: States.LEFT_CORNER,
-        Heading.SOUTH: States.RIGHT_CORNER,
-        Heading.WEST: States.TURN_AROUND,
-        Heading.EAST: States.STRAIGHT
-    },
-    Heading.NORTH: {
-        Heading.NORTH: States.STRAIGHT,
-        Heading.SOUTH: States.TURN_AROUND,
-        Heading.WEST: States.LEFT_CORNER,
-        Heading.EAST: States.RIGHT_CORNER
-    },
-    Heading.WEST: {
-        Heading.NORTH: States.RIGHT_CORNER,
-        Heading.SOUTH: States.LEFT_CORNER,
-        Heading.WEST: States.STRAIGHT,
-        Heading.EAST: States.TURN_AROUND
-    },
-    Heading.SOUTH: {
-        Heading.NORTH: States.TURN_AROUND,
-        Heading.SOUTH: States.STRAIGHT,
-        Heading.WEST: States.RIGHT_CORNER,
-        Heading.EAST: States.LEFT_CORNER
-    }
-}
-tempStates = {
-    # (1,0,0,0,0): States.LEFT_CORNER,
-    # (1,1,0,0,0): States.LEFT_CORNER,
-    (1,1,1,0,0): States.LEFT_CORNER,
-    (1,1,1,1,0): States.LEFT_CORNER,
-    # (0,0,0,0,1): States.RIGHT_CORNER,
-    # (0,0,0,1,1): States.RIGHT_CORNER,
-    (0,0,1,1,1): States.RIGHT_CORNER,
-    (0,1,1,1,1): States.RIGHT_CORNER
-}
 timeToIntersection = 0
-
 fromTCross = False
 IntersectionButStraight = False
-
-
 
 while True:
     # Read the IR sensor data and make it Digital
@@ -170,18 +127,18 @@ while True:
     SONIC_FILTER.update(SONIC.distance_cm())
     distance = SONIC_FILTER.get_median()
 
-    temp: list[int] = [0, 0, 0, 0, 0]
-    for i in range(len(prevReadings)):
-        ixs = sensorsByBooleans[i]
-        ixps = prevReadings[i]
-
-        if ixps and not ixs:
-            lastSeen[i] = time.ticks_ms()
-            temp[i] = 1
-
-        if not ixps and not ixs:
-            lastSeen[i] = 0
-            temp[i] = 0
+    # temp: list[int] = [0, 0, 0, 0, 0]
+    # for i in range(len(prevReadings)):
+    #     ixs = sensorsByBooleans[i]
+    #     ixps = prevReadings[i]
+    #
+    #     if ixps and not ixs:
+    #         lastSeen[i] = time.ticks_ms()
+    #         temp[i] = 1
+    #
+    #     if not ixps and not ixs:
+    #         lastSeen[i] = 0
+    #         temp[i] = 0
 
     # UPDATE currentState with the IR sensor data
     sensorState = getState[sensorsByBooleans]
@@ -275,7 +232,7 @@ while True:
                 print(currentPos,desiredPos, posIndx)
                 # desiredPos = shortestPath[posIndx + 1] if posIndx + 1 <= len(shortestPath) else shortestPath[posIndx]
 
-                desiredState = dictHeadings[currentHeading][desiredHeading]
+                desiredState = HeadingsToState[currentHeading][desiredHeading]
                 print(f"Desired Pos: {desiredPos} Heading: {desiredHeading} State: {desiredState}")
 
                 if currentState != desiredState:
@@ -369,11 +326,14 @@ while True:
         print(f"detected a obstacle between {A}:{B}")
         print(f"currentHeading: {currentHeading}, turn with heading: {nodes[B][A][1]}, from {B}:{A}, with state: ")
 
-        nextPos, nextState, nextHeading = shortestPath[posIndx-1], dictHeadings[currentHeading][nodes[B][A][1]], nodes[B][A][1]
+        nextPos, nextState, nextHeading = shortestPath[posIndx-1], HeadingsToState[currentHeading][nodes[B][A][1]], nodes[B][A][1]
 
 
     prevReadings = sensorsByBooleans
 
     DRIVER.drive(leftSpeed, rightSpeed)
     # com.send("Hello World.")
+    # if com.available():
+    #     mac, rev = com.recv(5)
+    #     print("GOT", rev.decode("utf-8"), len(rev))
     # time.sleep_ms(20)

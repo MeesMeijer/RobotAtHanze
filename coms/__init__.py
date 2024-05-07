@@ -17,13 +17,12 @@ class Coms:
         esp.active(True)
 
         # Define the MAC address of the receiving ESP32 (ESP32 B)
-        esp.add_peer(peer)
         self.esp = esp
         self.add_peer(peer)
 
     def add_peer(self, mac: bytes):
+        self.esp.add_peer(mac)
         self.peers.append(mac)
-        return True
 
     def send(self, msg: str):
         # print(msg, peers)
@@ -34,6 +33,11 @@ class Coms:
             # print(f"Sending data packet to {bytes(p)}")
             self.esp.send(p, msg)
 
+    def write(self, *args):
+        return self.send(str(args))
 
+    def available(self):
+        return self.esp.any()
 
-
+    def recv(self, timeout: int = 0):
+        return self.esp.recv(timeout)

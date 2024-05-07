@@ -1,16 +1,39 @@
-import heapq
+
+try:
+    import uheapq as heapq
+except ImportError:
+    import heapq
+
 
 class Heading:
+    __reversed = False
+
     NORTH = "N"
     SOUTH = "S"
     WEST = "W"
     EAST = "E"
+
+    def __init__(self, reversed: bool = False):
+        self.reverse(reversed)
+
+    def reverse(self, state: bool):
+        self.__reversed = state
+        self.NORTH = "N" if not state else "S"
+        self.SOUTH = "S" if not state else "N"
+        self.WEST = "W" if not state else "E"
+        self.EAST = "E" if not state else "W"
 
 class Length:
     x = 1
     x12 = 1 / 2
     x13 = 1 / 3
     x16 = 1 / 6
+
+class BoxPlaces:
+    RED = "Y"
+    BLUE = "AA"
+    BLACK =  "X"
+    GREEN = "Z"
 
 
 nodes: dict[str, dict[str, list[float, str]]] = {
@@ -29,20 +52,20 @@ nodes: dict[str, dict[str, list[float, str]]] = {
     "E": {
         "F": [Length.x16, Heading.EAST],
         "M": [Length.x12, Heading.NORTH],
-        "A": [Length.x13, Heading.SOUTH]
+        "A": [Length.x13, Heading.NORTH]
     },
     "F": {
-        "B": [Length.x13, Heading.SOUTH],
+        "B": [Length.x13, Heading.NORTH],
         "E": [Length.x16, Heading.WEST],
         "G": [Length.x16, Heading.EAST]
     },
     "G": {
         "F": [Length.x16, Heading.WEST],
-        "C": [Length.x13, Heading.SOUTH],
+        "C": [Length.x13, Heading.NORTH],
         "H": [Length.x16, Heading.EAST]
     },
     "H": {
-        "D": [Length.x13, Heading.SOUTH],
+        "D": [Length.x13, Heading.NORTH],
         "G": [Length.x16, Heading.WEST],
         "I": [Length.x13, Heading.EAST]
     },
@@ -216,8 +239,97 @@ class Graph:
         # Return the shortest distance and the path taken
         shortest_distance = distances[end]
         shortest_path = paths[end] + [end]
-        return shortest_distance, shortest_path
+
+        direction_list: list[Heading] = []
+        for x in range(0, len(shortest_path)-1):
+            A = shortest_path[x]
+            B = shortest_path[x+1]
+            direction_list.append(nodes[A][B][1])
+
+        return shortest_distance, shortest_path, direction_list
 
     def BlockConnection(self, A: str, B: str):
         self.nodes[A][B][0] = 1e25
         self.nodes[B][A][0] = 1e25
+
+    def clearBlocks(self, nodes):
+        self.nodes = nodes
+
+# graph = Graph(nodes)
+
+# graph.BlockConnection("K", "N")
+# graph.BlockConnection("N", "Q")
+# graph.BlockConnection("J", "L")
+# graph.BlockConnection("O", "W")
+# graph.BlockConnection("E", "M")
+# graph.BlockConnection("R", "S")
+
+# Example usage: find the shortest distance between nodes "A" and "Z"
+# start_node = "A"
+# end_node = "Z"
+# shortest_distance, shortest_path = graph.dijkstra(start_node, end_node)
+
+
+# print(f"The shortest distance between {start_node} and {end_node} is {shortest_distance}.")
+# print(f"The shortest path is: {' -> '.join(shortest_path)}")
+# print(f"The Directions for the shortest path are: {' -> '.join(direction_list)}")
+# #
+
+#
+# # Extract x and y coordinates
+# x_coords = [coord[0] for coord in plottingData.values()]
+# y_coords = [coord[1] for coord in plottingData.values()]
+#
+# # Plotting
+# plt.figure(figsize=(8, 6))
+#
+# # Plot points
+# plt.scatter(x_coords, y_coords, color='blue')
+#
+# # Annotate points
+# for letter, (x, y) in plottingData.items():
+#     plt.text(x+1/20, y+1/20, letter, fontsize=12, ha='center', va='center')
+#
+# xB, yB = [], []
+# for node in shortest_path:
+#     x, y = plottingData[node]
+#     xB.append(x)
+#     yB.append(y)
+# # xB.append(plottingData["Z"][0])
+# # yB.append(plottingData["Z"][1])
+#
+# plt.plot(xB, yB, marker='o', linestyle='-', color='red', label='Line ABCD')
+#
+# plt.xlabel('Horizontal Axis')
+# plt.ylabel('Vertical Axis')
+# plt.title('Plot of Points')
+# plt.grid(True)
+# plt.tight_layout()
+#
+# import matplotlib.pyplot as plt
+# from matplotlib.animation import FuncAnimation
+#
+# # Extract x and y coordinates
+# x_coords = [coord[0] for coord in plottingData.values()]
+# y_coords = [coord[1] for coord in plottingData.values()]
+#
+# # Plotting
+# # fig, ax = plt.subplot()
+# fig = plt.figure()
+# # Plot points
+# plt.scatter(x_coords, y_coords, color='blue')
+# for letter, (x, y) in plottingData.items():
+#     plt.text(x + 1/20, y + 1/20, letter, fontsize=12, ha='center', va='center')
+#
+# # Initialize an empty plot for the robot's path
+# robot_path, = plt.plot(xB[0], yB[0], marker='o', linestyle='-', color='green')
+#
+# def update(frame):
+#     robot_path.set_data(xB[:frame], yB[:frame])  # Update robot path
+#     return robot_path,
+#
+# # Create animation
+# ani = FuncAnimation(fig, update, frames=len(xB)+1, interval=100, blit=True, repeat=False)
+#
+# plt.grid(True)
+# plt.show()
