@@ -4,6 +4,56 @@ try:
 except ImportError:
     import heapq
 
+class States:
+    STRAIGHT = "STRAIGHT"
+    LEFT_CORNER = "LEFT_CORNER"
+    RIGHT_CORNER = "RIGHT_CORNER"
+    CROSS_POINT = "CROSS_POINT"
+    T_CROSS = "T_CROSS"
+    OBSTACLE = "OBSTACLE"
+    STOP = "STOP"
+    TURN_AROUND = "TURN_AROUND"
+    PICK_UP_BOX = "PICK_UP_BOX"
+    GO_TO_GOAL = "GO_TO_GOAL"
+    AT_GOAL = "AT_GOAL"
+
+    statesByBooleans = {
+        (0, 0, 1, 0, 0):  STRAIGHT,      # (0, 0, 1, 0, 0)
+        (0, 1, 0, 0, 0):  STRAIGHT,      # (0, 1, 0, 0, 0)
+        (0, 0, 0, 1, 0):  STRAIGHT,      # (0, 0, 0, 1, 0)
+        (0, 1, 1, 0, 0):  STRAIGHT,      # (0, 1, 1, 0, 0)
+        (0, 0, 1, 1, 0):  STRAIGHT,      # (0, 0, 1, 1, 0)
+        (0, 1, 1, 1, 0):  STRAIGHT,      # (0 ,1, 1, 1, 0)
+        (0, 0, 0, 1, 1):   STRAIGHT,
+        (1, 1, 0, 0, 0): STRAIGHT,  # (0, 0, 0, 1, 1)
+        (0, 0, 1, 1, 1):  RIGHT_CORNER,      # (1, 1, 0, 0, 0)
+        (1,  1,  1,  0, 0):  LEFT_CORNER,      # (1, 1, 1, 0, 0)
+        (1,0,0,0,0): STRAIGHT,
+        (0,0,0,0,1): STRAIGHT,
+        # (0, 0, 1, 1, 1):   RIGHT_CORNER,      # (0, 0, 1, 1, 1)
+        (0, 1, 1, 1, 1):   RIGHT_CORNER,  # (0, 1, 1, 1, 1)
+        (1, 1, 1, 1, 0):  LEFT_CORNER,   # (1, 1, 1, 1, 0)
+        # (1, 1, 1, 0, 0): LEFT_CORNER,
+        (0, 0, 0, 0, 0):  STOP,           # (0, 0, 0, 0, 0),
+        (1, 1, 1, 1, 1): T_CROSS
+    }
+
+    currentState = STOP
+
+    def __init__(self, startState: str):
+        self.currentState = startState
+
+    def __str__(self):
+        return f"{self.currentState}"
+
+    def __getitem__(self, item ):
+        # if type(item) is type(str()):
+        state = self.statesByBooleans.get(tuple(item))
+        if not state:
+            return self.STOP
+        return state
+
+
 
 class Heading:
     __reversed = False
@@ -35,6 +85,36 @@ class BoxPlaces:
     BLACK =  "X"
     GREEN = "Z"
 
+#   N
+# W   E
+#   S
+
+HeadingsToState = {
+    Heading.EAST: {
+        Heading.NORTH: States.LEFT_CORNER,
+        Heading.SOUTH: States.RIGHT_CORNER,
+        Heading.WEST: States.TURN_AROUND,
+        Heading.EAST: States.STRAIGHT
+    },
+    Heading.NORTH: {
+        Heading.NORTH: States.STRAIGHT,
+        Heading.SOUTH: States.TURN_AROUND,
+        Heading.WEST: States.LEFT_CORNER,
+        Heading.EAST: States.RIGHT_CORNER
+    },
+    Heading.WEST: {
+        Heading.NORTH: States.RIGHT_CORNER,
+        Heading.SOUTH: States.LEFT_CORNER,
+        Heading.WEST: States.STRAIGHT,
+        Heading.EAST: States.TURN_AROUND
+    },
+    Heading.SOUTH: {
+        Heading.NORTH: States.TURN_AROUND,
+        Heading.SOUTH: States.STRAIGHT,
+        Heading.WEST: States.RIGHT_CORNER,
+        Heading.EAST: States.LEFT_CORNER
+    }
+}
 
 nodes: dict[str, dict[str, list[float, str]]] = {
     "A": {
