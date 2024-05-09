@@ -25,7 +25,7 @@ class RobotDataEvent(wx.PyEvent):
         self.error = error
         self.data = data
 
-        if not error and len(data) > 0 and data[0] == ROBOT_DATA_PREFIX: 
+        if not error and data.startswith(ROBOT_DATA_PREFIX): 
             print("proceed with the data")
             self.currentState = ""
             self.currentPos = ""
@@ -47,7 +47,6 @@ class WorkerThread(Thread):
         self.dataTosend: list[str] = []
         self.start()
 
-    str().startswith()
     def run(self):
         try:
             serialConnection = serial.Serial(self.port, 115200)
@@ -109,6 +108,8 @@ class RealTimePlot(wx.Frame):
         btnEvent: wx.Button = event.EventObject
         
         eventName = btnEvent.GetName()
+        print("[debug] - Got Btnsubmit event: ", eventName)
+
         if eventName == "connect":
             self.StartSerialWorker(str(self.robotPort.GetValue()).strip())
             self.robotPort.SetEditable(False)
@@ -125,9 +126,18 @@ class RealTimePlot(wx.Frame):
             self.robotPortConnect.SetLabel("Connect")
 
         
-        elif eventName == "send_command":
+        elif eventName == "start_robot":
             if self.worker and not self.worker.dead:
-                self.worker.dataTosend.append("testing")
+                self.worker.dataTosend.append("START_ROBOT")
+            else: 
+                print("[error] - Trying to send commands, but not connected..")
+                
+        elif eventName == "stop_robot":
+            if self.worker and not self.worker.dead:
+                self.worker.dataTosend.append("STOP_ROBOT")
+            else:
+                print("[error] - Trying to send commands, but not connected..")
+
 
     def ResetUI():
         pass 
@@ -161,15 +171,41 @@ class RealTimePlot(wx.Frame):
         
         robotPortLabel = wx.StaticText(panel, label="Serial Port: ")
         self.robotPort = wx.TextCtrl(panel, value="COM3")
-        
         self.robotPortConnect = wx.Button(panel, wx.ID_ANY, label='Connect', name="connect") 
-        panel.Bind(wx.EVT_BUTTON, self.OnBtnSubmit)
-        
+
         robotInputSizer.Add(robotPortLabel, 0, wx.ALL, 5)
         robotInputSizer.Add(self.robotPort, 0, wx.ALL, 5)
-        robotInputSizer.Add(self.robotPortConnect, 0, wx.ALL, 5)
+        robotInputSizer.Add(self.robotPortConnect, 1, wx.ALL, 5)
 
-        v2.Add(robotInputSizer, 0, wx.ALL , 5)
+        v2.Add(robotInputSizer, 0, wx.ALL | wx.EXPAND , 5)
+
+
+        ctrlabel = wx.StaticText(panel, label="Robot Controls:")
+
+        ctrlabelSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        robotStartBtn = wx.Button(panel, wx.ID_ANY, label="Start", name="start_robot")
+        robotStopBtn = wx.Button(panel, wx.ID_ANY, label="Stop", name="stop_robot")
+        
+        ctrlabelSizer.Add(ctrlabel, 1, wx.ALL | wx.CENTER, 1)
+        ctrlabelSizer.Add(robotStartBtn, 0, wx.ALL, 5)
+        ctrlabelSizer.Add(robotStopBtn, 0, wx.ALL, 5)
+
+
+
+        v2.Add(ctrlabelSizer, 0, wx.ALL | wx.Center, 5)
+
+        # robotControlsSizer = wx.BoxSizer(wx.VERTICAL)
+
+        # robotStartStopSizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # robotControlsSizer.Add(robotStartStopSizer, 0, wx.ALL, 5)
+
+        # v2.Add(robotControlsSizer, 0, wx.ALL , 5)
+
+
+
+
 
         v2ab = wx.BoxSizer(wx.HORIZONTAL)
         v2a = wx.BoxSizer(wx.VERTICAL)
@@ -296,6 +332,7 @@ class RealTimePlot(wx.Frame):
         # self.Centre()
         self.Show(True)
 
+        panel.Bind(wx.EVT_BUTTON, self.OnBtnSubmit)
         EVT_RESULT(self, self.onRobotData)
 
     def onRobotData(self, data: RobotDataEvent):
@@ -331,7 +368,7 @@ class RealTimePlot(wx.Frame):
     
         self.ax.grid()
         
-        self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=15, interval=1000)
+        self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=13, interval=1000)
     
     def SetShortedPath(self, path: list[str]):
         self.shortestPathData = path
