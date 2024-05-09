@@ -3,16 +3,140 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 import matplotlib.animation as animation
-
+from threading import *
 import mapping
 
+import serial
+
+EVT_RESULT_ID = wx.NewIdRef()
+ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", b"<"
+
+def EVT_RESULT(win, func):
+    """Define Result Event."""
+    win.Connect(-1, -1, EVT_RESULT_ID, func)
+
+
+class RobotDataEvent(wx.PyEvent):
+
+    def __init__(self, error: bool, data: str):
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_RESULT_ID)
+
+        self.error = error
+        self.data = data
+
+        if not error and len(data) > 0 and data[0] == ROBOT_DATA_PREFIX: 
+            print("proceed with the data")
+            self.currentState = ""
+            self.currentPos = ""
+            self.currentHeading = ""
+
+            self.nextState = ""
+            self.nextPos = ""
+            self.nextHeading = ""
+
+
+class WorkerThread(Thread):
+
+    def __init__(self, frame: wx.Frame, port: str):
+        Thread.__init__(self)
+        self.frame = frame
+        self.port = port
+        self._want_abort = False
+        self.dead = False
+        self.dataTosend: list[str] = []
+        self.start()
+
+    str().startswith()
+    def run(self):
+        try:
+            serialConnection = serial.Serial(self.port, 115200)
+
+            while True: 
+                if serialConnection.in_waiting > 0: 
+                    recvData = serialConnection.readline().decode().strip()
+                    print("[debug] - Got data from port:", self.port ,"\n -->", recvData)
+                    wx.PostEvent(self.frame, RobotDataEvent(False, recvData))
+
+                if len(self.dataTosend) > 0: 
+                    for _ in range(len(self.dataTosend)): 
+                        msg = self.dataTosend.pop(0)
+                        print(f"[debug] - Sending {len(msg)} bytes. \n -->", msg)
+                        serialConnection.write(DASH_DATA_PREFIX + msg.encode() + b"\n")
+                    
+                if self._want_abort: 
+                    print("[debug] - Abort is requested.")
+                    serialConnection.close()
+                    self.dead = True
+                    return wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to aborting"))
+        
+        except Exception as e: 
+            print("ERROR FROM WORKER.RUN", e)
+            wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to error. "))
+            self.dead = True
+
+
+    def abort(self):
+        self._want_abort = True
+    
+
+
 class RealTimePlot(wx.Frame):
+    
+    worker: WorkerThread = None
+
     def __init__(self):
         super(RealTimePlot, self).__init__(None, title="Plotter", size=(1100, 800))
         
         self.InitUI()
         self.InitPlot() 
+    
+    def StartSerialWorker(self, port: str = "COM3"):
+        if not self.worker or self.worker.dead:
+            print("[debug] - Starting worker thread with port: ", port) 
+            self.worker = WorkerThread(self, port)
+            return  
         
+        print("[debug] - Got SerialWorker already working..")
+    
+    def StopSerialWorker(self):
+        if not self.worker or self.worker.dead: return False
+        print("[debug] - Stopping worker thread.")
+        self.worker.abort()
+        self.worker = None
+
+    def OnBtnSubmit(self, event: wx.CommandEvent):
+        btnEvent: wx.Button = event.EventObject
+        
+        eventName = btnEvent.GetName()
+        if eventName == "connect":
+            self.StartSerialWorker(str(self.robotPort.GetValue()).strip())
+            self.robotPort.SetEditable(False)
+            self.robotPortConnect.SetName("disconnect")
+            self.robotPortConnect.SetLabel("Disconnect")
+            
+            if self.worker and not self.worker.dead:
+                self.worker.dataTosend.append("testing")
+
+        elif eventName == "disconnect":
+            self.StopSerialWorker()
+            self.robotPort.SetEditable(True)
+            self.robotPortConnect.SetName("connect")
+            self.robotPortConnect.SetLabel("Connect")
+
+        
+        elif eventName == "send_command":
+            if self.worker and not self.worker.dead:
+                self.worker.dataTosend.append("testing")
+
+    def ResetUI():
+        pass 
+
+    def ResetPlot():
+        pass 
+
+
+
     def InitUI(self):
         panel = wx.Panel(self)
         
@@ -30,8 +154,24 @@ class RealTimePlot(wx.Frame):
         v1.Add(self.canvas, 1, wx.EXPAND | wx.ALL, 10)
 
         # Evertthin in V2             
-        v2 = wx.BoxSizer(wx.HORIZONTAL)
+        v2 = wx.BoxSizer(wx.VERTICAL)
         
+
+        robotInputSizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        robotPortLabel = wx.StaticText(panel, label="Serial Port: ")
+        self.robotPort = wx.TextCtrl(panel, value="COM3")
+        
+        self.robotPortConnect = wx.Button(panel, wx.ID_ANY, label='Connect', name="connect") 
+        panel.Bind(wx.EVT_BUTTON, self.OnBtnSubmit)
+        
+        robotInputSizer.Add(robotPortLabel, 0, wx.ALL, 5)
+        robotInputSizer.Add(self.robotPort, 0, wx.ALL, 5)
+        robotInputSizer.Add(self.robotPortConnect, 0, wx.ALL, 5)
+
+        v2.Add(robotInputSizer, 0, wx.ALL , 5)
+
+        v2ab = wx.BoxSizer(wx.HORIZONTAL)
         v2a = wx.BoxSizer(wx.VERTICAL)
         
         currentLabel = wx.StaticText(panel, wx.ID_ANY, 'Current')
@@ -126,10 +266,13 @@ class RealTimePlot(wx.Frame):
         v2b.Add(nextPosSizer, 0, wx.ALL|wx.EXPAND, 5)
         v2b.Add(nextHeadingSizer, 0, wx.ALL|wx.EXPAND, 5)
 
-        v2.Add(v2a, 0,  wx.EXPAND, 1)
-        v2.Add(v2b, 1,  wx.EXPAND, 2)
+        # v2ab.Add(v2a, )
+
+        v2ab.Add(v2a, 0,  wx.EXPAND, 10)
+        v2ab.Add(v2b, 10,  wx.EXPAND, 2)
         
-        
+        v2.Add(v2ab, 0, wx.EXPAND, 5)
+
         h2.Add(v1, 0, wx.ALL | wx.EXPAND, 10)
         h2.Add(v2, 10, wx.ALL | wx.EXPAND, 20)
 
@@ -147,12 +290,26 @@ class RealTimePlot(wx.Frame):
         h1.Add(wx.StaticLine(panel), 0, wx.ALL | wx.EXPAND, 1)
         h1.Add(h3, 0, wx.ALL | wx.EXPAND, 10)
       
-    
         panel.SetSizer(h1)
         h1.Fit(panel)
         
         # self.Centre()
         self.Show(True)
+
+        EVT_RESULT(self, self.onRobotData)
+
+    def onRobotData(self, data: RobotDataEvent):
+        # print(data)
+        if data.error: 
+            data.data = "[ERROR] - " + data.data
+
+        self.textbox.AppendText(data.data + '\n')
+        # self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
+        
+        if self.autoscroll: 
+            self.textbox.SetInsertionPointEnd()
+        
+
         
     def InitPlot(self):
         # TODO: Remove this
@@ -174,7 +331,7 @@ class RealTimePlot(wx.Frame):
     
         self.ax.grid()
         
-        self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=100, interval=1000)
+        self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=15, interval=1000)
     
     def SetShortedPath(self, path: list[str]):
         self.shortestPathData = path
@@ -205,10 +362,19 @@ class RealTimePlot(wx.Frame):
             return self.points, 
         
         self.SetRobotPos((self.shortestPathData[i], self.shortestPathData[i+1]))
-        self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
+
+        self.currentState.SetLabel(self.nextState.GetLabel() if self.nextState.GetLabel() != "" else "STRAIGHT")
+        self.currentHeading.SetLabel(mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1])
+        self.currentPos.SetLabel(f"{self.shortestPathData[i]}-{self.shortestPathData[i+1]}")
+
+        self.nextHeading.SetLabel(mapping.nodes[self.shortestPathData[i+1]][self.shortestPathData[i+2]][1])
+        self.nextPos.SetLabel(f"{self.shortestPathData[i+1]}-{self.shortestPathData[i+2]}")
+        self.nextState.SetLabel(mapping.HeadingsToState[self.currentHeading.GetLabel()][self.nextHeading.GetLabel()])
+
+        # self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
         
-        if self.autoscroll: 
-            self.textbox.SetInsertionPointEnd()
+        # if self.autoscroll: 
+        #     self.textbox.SetInsertionPointEnd()
 
         return self.points, 
 
