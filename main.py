@@ -16,6 +16,7 @@ from coms import Coms
 
 frequency = 15000
 WHITE_THRESHOLD = 850
+ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", "<"
 
 I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
@@ -332,8 +333,13 @@ while True:
     prevReadings = sensorsByBooleans
 
     DRIVER.drive(leftSpeed, rightSpeed)
-    # com.send("Hello World.")
-    # if com.available():
-    #     mac, rev = com.recv(5)
-    #     print("GOT", rev.decode("utf-8"), len(rev))
+#    com.send(f"{ROBOT_DATA_PREFIX}STRAIGHT,"+str(utime.time()))
+
+#     if com.available():
+#         mac, rev = com.recv(5)
+#         print("GOT", rev.decode("utf-8"), len(rev.decode("utf-8")), "isCommand", rev.decode().startswith(DASH_DATA_PREFIX))
+#         # print(rev[1].decode("utf-8"))
+
+
+#         # ints = int(rev[1].decode("utf-8").split(":")[1]) + 1
     # time.sleep_ms(20)
