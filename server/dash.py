@@ -2,14 +2,13 @@ import wx
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-import matplotlib.animation as animation
 from threading import *
 import mapping
 
 import serial
 
 EVT_RESULT_ID = wx.NewIdRef()
-ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", b"<"
+ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", "<"
 
 def EVT_RESULT(win, func):
     """Define Result Event."""
@@ -25,15 +24,15 @@ class RobotDataEvent(wx.PyEvent):
         self.error = error
         self.data = data
 
-        if not error and data.startswith(ROBOT_DATA_PREFIX): 
-            print("proceed with the data")
-            self.currentState = ""
-            self.currentPos = ""
-            self.currentHeading = ""
-
-            self.nextState = ""
-            self.nextPos = ""
-            self.nextHeading = ""
+        # if not error and data.startswith(ROBOT_DATA_PREFIX):
+        #     print("proceed with the data")
+        #     self.currentState = ""
+        #     self.currentPos = ""
+        #     self.currentHeading = ""
+        #
+        #     self.nextState = ""
+        #     self.nextPos = ""
+        #     self.nextHeading = ""
 
 
 class WorkerThread(Thread):
@@ -61,7 +60,7 @@ class WorkerThread(Thread):
                     for _ in range(len(self.dataTosend)): 
                         msg = self.dataTosend.pop(0)
                         print(f"[debug] - Sending {len(msg)} bytes. \n -->", msg)
-                        serialConnection.write(DASH_DATA_PREFIX + msg.encode() + b"\n")
+                        serialConnection.write(DASH_DATA_PREFIX.encode() + msg.encode() + b"\n")
                     
                 if self._want_abort: 
                     print("[debug] - Abort is requested.")
@@ -74,15 +73,163 @@ class WorkerThread(Thread):
             wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to error. "))
             self.dead = True
 
-
     def abort(self):
         self._want_abort = True
+
+class RobotUpdateDialog(wx.Dialog):
+
+    choices = ["X", "Y", "Z", "AA"]
     
+    def __init__(self, lastData: dict[str, any]):
+        super(RobotUpdateDialog, self).__init__(None, title="Robot Control Dialog", size=(1100, 800))
+        # super().__init__(None, title="Robot Control Dialog", size=(300, 250))
+        self.lastData = lastData
+        self.InitUI()
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # --
+        posSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        startPosLabel = wx.StaticText(panel, label="Start Position: (A-Z)")
+        self.startPosInput = wx.TextCtrl(panel, value="I-H")
+
+        posSizer.Add(startPosLabel, 0, wx.ALL | wx.LEFT, 5)
+        posSizer.Add(self.startPosInput, 0, wx.ALL | wx.EXPAND,1)
+
+        sizer.Add(posSizer, 0, wx.ALL | wx.EXPAND, 10)
+        # --
+
+        # --
+        blockedPathsSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        blockedPathsLabel = wx.StaticText(panel, label="Blocked Paths: (A-Z,..)")
+
+        label = "N/A"
+        if len(self.lastData["BLOCKED_PATHS"]) > 0:
+            label = ",".join(self.lastData["BLOCKED_PATHS"])
+
+        self.blockedPathsInput = wx.StaticText(panel, label=label)
+
+        blockedPathsSizer.Add(blockedPathsLabel, 0, wx.ALL, 5)
+        blockedPathsSizer.Add(self.blockedPathsInput, 1, wx.ALL | wx.EXPAND, 5)
+
+        sizer.Add(blockedPathsSizer, 0, wx.ALL | wx.EXPAND, 10)
+        # --
+
+        # --
+        boxEndpointsSizerV = wx.BoxSizer(wx.VERTICAL)
+
+        boxEndpointsLabel = wx.StaticText(panel, label="Boxes Endpoints")
+        boxEndpointsLabelSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        boxEndpointsLabelSizer.Add(boxEndpointsLabel, 0, wx.ALL, 5)
+        boxEndpointsSizerV.Add(boxEndpointsLabelSizer, 0, wx.ALL, 0)
+
+        # +
+        blackBoxPosLabel = wx.StaticText(panel, label="Black Box: ")
+        self.blackBoxPosInput = wx.Choice(panel, choices=self.choices)
+        self.blackBoxPosInput.SetSelection(self.choices.index(self.lastData["BOX_ENDPOINTS"]["BLACK"]))
+        blackBoxSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        blackBoxSizer.Add(blackBoxPosLabel, 0, wx.ALL, 5)
+        blackBoxSizer.Add(self.blackBoxPosInput, 1, wx.ALL | wx.EXPAND, 1)
+
+        boxEndpointsSizerV.Add(blackBoxSizer, 0, wx.ALL, 10)
+        # -
+
+        # +
+        redBoxPosLabel = wx.StaticText(panel, label="Red Box: ")
+        self.redBoxPosInput = wx.Choice(panel, choices=self.choices)
+        self.redBoxPosInput.SetSelection(self.choices.index(self.lastData["BOX_ENDPOINTS"]["RED"]))
+        redBoxSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        redBoxSizer.Add(redBoxPosLabel, 0, wx.ALL, 5)
+        redBoxSizer.Add(self.redBoxPosInput, 1, wx.ALL | wx.EXPAND, 1)
+
+        boxEndpointsSizerV.Add(redBoxSizer, 0, wx.ALL, 10)
+        # -
+
+        # +
+        greenBoxPosLabel = wx.StaticText(panel, label="Green Box: ")
+        self.greenBoxPosInput = wx.Choice(panel, choices=self.choices)
+        self.greenBoxPosInput.SetSelection(self.choices.index(self.lastData["BOX_ENDPOINTS"]["GREEN"]))
+        greenBoxSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        greenBoxSizer.Add(greenBoxPosLabel, 0, wx.ALL, 5)
+        greenBoxSizer.Add(self.greenBoxPosInput, 1, wx.ALL | wx.EXPAND, 1)
+
+        boxEndpointsSizerV.Add(greenBoxSizer, 0, wx.ALL, 10)
+        # -
+
+        # +
+        blueBoxPosLabel = wx.StaticText(panel, label="Blue Box: ")
+        self.blueBoxPosInput = wx.Choice(panel, choices=self.choices)
+        self.blueBoxPosInput.SetSelection(self.choices.index(self.lastData["BOX_ENDPOINTS"]["BLUE"]))
+        blueBoxSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        blueBoxSizer.Add(blueBoxPosLabel, 0, wx.ALL, 5)
+        blueBoxSizer.Add(self.blueBoxPosInput, 1, wx.ALL | wx.EXPAND, 1)
+
+        boxEndpointsSizerV.Add(blueBoxSizer, 0, wx.ALL | wx.EXPAND, 10)
+        # -
+
+        sizer.Add(boxEndpointsSizerV, 0, wx.ALL, 10)
+        # --
+
+        # --
+        updateBtnLabel = wx.StaticText(panel, label="Select to Update: ")
+        self.updateBtn = wx.CheckBox(panel)
+        updateBtnSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        updateBtnSizer.Add(updateBtnLabel, 0, wx.ALL, 5)
+        updateBtnSizer.Add(self.updateBtn, 1, wx.ALL | wx.EXPAND, 1)
+
+        sizer.Add(updateBtnSizer, 0, wx.ALL, 10)
+        # --
+
+
+        # --
+        resetBtnLabel = wx.StaticText(panel, label="Select to Reset: ")
+
+        self.resetBtn = wx.CheckBox(panel)
+        resetBtnSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        resetBtnSizer.Add(resetBtnLabel, 0, wx.ALL, 5)
+        resetBtnSizer.Add(self.resetBtn, 1, wx.ALL | wx.EXPAND, 1)
+
+        sizer.Add(resetBtnSizer, 0, wx.ALL, 10)
+        # --
+
+        panel.SetSizer(sizer)
+        sizer.Fit(panel)
+
+        # self.Centre()
+        self.Show(True)
+        # self.ShowModal()
+
+    def GetData(self):
+        if self.updateBtn.GetValue():
+
+            return [
+                self.startPosInput.GetValue(),
+                self.choices[self.blackBoxPosInput.GetSelection()],
+                self.choices[self.redBoxPosInput.GetSelection()],
+                self.choices[self.greenBoxPosInput.GetSelection()],
+                self.choices[self.blueBoxPosInput.GetSelection()],
+            ]
+
+        return False
+
+
 
 
 class RealTimePlot(wx.Frame):
     
-    worker: WorkerThread = None
+    worker: WorkerThread | None = None
 
     def __init__(self):
         super(RealTimePlot, self).__init__(None, title="Plotter", size=(1100, 800))
@@ -110,33 +257,49 @@ class RealTimePlot(wx.Frame):
         eventName = btnEvent.GetName()
         print("[debug] - Got Btnsubmit event: ", eventName)
 
-        if eventName == "connect":
+        if eventName == "CONNECT":
             self.StartSerialWorker(str(self.robotPort.GetValue()).strip())
             self.robotPort.SetEditable(False)
-            self.robotPortConnect.SetName("disconnect")
+            self.robotPortConnect.SetName("DISCONNECT")
             self.robotPortConnect.SetLabel("Disconnect")
-            
-            if self.worker and not self.worker.dead:
-                self.worker.dataTosend.append("testing")
+            #
+            # if self.worker and not self.worker.dead:
+            #     self.worker.dataTosend.append("testing")
 
-        elif eventName == "disconnect":
+        elif eventName == "DISCONNECT":
             self.StopSerialWorker()
             self.robotPort.SetEditable(True)
-            self.robotPortConnect.SetName("connect")
+            self.robotPortConnect.SetName("CONNECT")
             self.robotPortConnect.SetLabel("Connect")
 
-        
-        elif eventName == "start_robot":
+        elif eventName == "START_ROBOT":
             if self.worker and not self.worker.dead:
                 self.worker.dataTosend.append("START_ROBOT")
             else: 
                 print("[error] - Trying to send commands, but not connected..")
                 
-        elif eventName == "stop_robot":
+        elif eventName == "STOP_ROBOT":
             if self.worker and not self.worker.dead:
                 self.worker.dataTosend.append("STOP_ROBOT")
             else:
                 print("[error] - Trying to send commands, but not connected..")
+
+        elif eventName == "UPDATE_ROBOT":
+            dialog = RobotUpdateDialog({
+                "BLOCKED_PATHS": ["Q-N"],
+                "START_POS": "Q-S",
+                "BOX_ENDPOINTS": {
+                    "BLACK": "X", "RED": "Y", "GREEN": "Z", "BLUE": "X"
+                }
+            })
+            dialog.ShowModal()
+
+            data = dialog.GetData()
+            print(data)
+            #TODO: Update the robot
+
+
+            dialog.Destroy()
 
 
     def ResetUI():
@@ -151,10 +314,8 @@ class RealTimePlot(wx.Frame):
         panel = wx.Panel(self)
         
         h1 = wx.BoxSizer(wx.VERTICAL)
-
         h2 = wx.BoxSizer(wx.HORIZONTAL)
-        
-        
+
         # Everything in V1
         v1 = wx.BoxSizer(wx.VERTICAL)
         
@@ -165,20 +326,18 @@ class RealTimePlot(wx.Frame):
 
         # Evertthin in V2             
         v2 = wx.BoxSizer(wx.VERTICAL)
-        
 
         robotInputSizer = wx.BoxSizer(wx.HORIZONTAL)
         
         robotPortLabel = wx.StaticText(panel, label="Serial Port: ")
         self.robotPort = wx.TextCtrl(panel, value="COM3")
-        self.robotPortConnect = wx.Button(panel, wx.ID_ANY, label='Connect', name="connect") 
+        self.robotPortConnect = wx.Button(panel, wx.ID_ANY, label='Connect', name="CONNECT")
 
         robotInputSizer.Add(robotPortLabel, 0, wx.ALL, 5)
         robotInputSizer.Add(self.robotPort, 0, wx.ALL, 5)
         robotInputSizer.Add(self.robotPortConnect, 1, wx.ALL, 5)
 
-        v2.Add(robotInputSizer, 0, wx.ALL | wx.EXPAND , 5)
-
+        v2.Add(robotInputSizer, 0, wx.ALL | wx.EXPAND, 5)
 
         ctrlabel = wx.StaticText(panel, label="Robot Controls:")
 
@@ -186,12 +345,12 @@ class RealTimePlot(wx.Frame):
 
         robotStartBtn = wx.Button(panel, wx.ID_ANY, label="Start", name="start_robot")
         robotStopBtn = wx.Button(panel, wx.ID_ANY, label="Stop", name="stop_robot")
-        
+        robotUpdateBtn = wx.Button(panel, wx.ID_ANY, label='Update', name="UPDATE_ROBOT")
+
         ctrlabelSizer.Add(ctrlabel, 1, wx.ALL | wx.CENTER, 1)
         ctrlabelSizer.Add(robotStartBtn, 0, wx.ALL, 5)
         ctrlabelSizer.Add(robotStopBtn, 0, wx.ALL, 5)
-
-
+        ctrlabelSizer.Add(robotUpdateBtn, 0, wx.ALL, 5)
 
         v2.Add(ctrlabelSizer, 0, wx.ALL | wx.Center, 5)
 
@@ -202,10 +361,6 @@ class RealTimePlot(wx.Frame):
         # robotControlsSizer.Add(robotStartStopSizer, 0, wx.ALL, 5)
 
         # v2.Add(robotControlsSizer, 0, wx.ALL , 5)
-
-
-
-
 
         v2ab = wx.BoxSizer(wx.HORIZONTAL)
         v2a = wx.BoxSizer(wx.VERTICAL)
@@ -273,10 +428,6 @@ class RealTimePlot(wx.Frame):
         self.nextHeading = wx.StaticText(panel, wx.ID_ANY, label='N/A')
 
         nextLabelSizer = wx.BoxSizer(wx.HORIZONTAL)
-   
-        nextStateSizer =  wx.BoxSizer(wx.HORIZONTAL)
-        nextPosSizer = wx.BoxSizer(wx.HORIZONTAL)
-        nextHeadingSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         nextStateSizer = wx.BoxSizer(wx.HORIZONTAL)
         nextPosSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -301,8 +452,6 @@ class RealTimePlot(wx.Frame):
         v2b.Add(nextStateSizer, 0, wx.ALL|wx.EXPAND, 5)
         v2b.Add(nextPosSizer, 0, wx.ALL|wx.EXPAND, 5)
         v2b.Add(nextHeadingSizer, 0, wx.ALL|wx.EXPAND, 5)
-
-        # v2ab.Add(v2a, )
 
         v2ab.Add(v2a, 0,  wx.EXPAND, 10)
         v2ab.Add(v2b, 10,  wx.EXPAND, 2)
@@ -337,15 +486,15 @@ class RealTimePlot(wx.Frame):
 
     def onRobotData(self, data: RobotDataEvent):
         # print(data)
-        if data.error: 
+        if data.error:
             data.data = "[ERROR] - " + data.data
 
         self.textbox.AppendText(data.data + '\n')
         # self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
-        
-        if self.autoscroll: 
+
+        if self.autoscroll:
             self.textbox.SetInsertionPointEnd()
-        
+
 
         
     def InitPlot(self):
@@ -368,7 +517,7 @@ class RealTimePlot(wx.Frame):
     
         self.ax.grid()
         
-        self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=13, interval=1000)
+        # self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=13, interval=1000)
     
     def SetShortedPath(self, path: list[str]):
         self.shortestPathData = path
@@ -417,21 +566,5 @@ class RealTimePlot(wx.Frame):
 
 if __name__ == '__main__':
     app = wx.App()
-
-    graph = mapping.Graph(mapping.nodes)
-
-    # graph.BlockConnection("K", "N")
-    # graph.BlockConnection("N", "Q")
-    # graph.BlockConnection("J", "L")
-    # graph.BlockConnection("O", "W")
-    # graph.BlockConnection("E", "M")
-    # graph.BlockConnection("R", "S")
-
-    # Example usage: find the shortest distance between nodes "A" and "Z"
-    start_node = "A"
-    end_node = "AA"
-    shortest_distance, shortest_path, dirs = graph.dijkstra(start_node, end_node)
-
     p = RealTimePlot()
-    p.SetShortedPath(shortest_path)
     app.MainLoop()

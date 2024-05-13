@@ -49,64 +49,62 @@ DRIVER = MotorDriver(leftMotor, rightMotor)
 # Color sensor
 TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
-pid = PID(4, 0, 0)
-PID_BACK = PID(4,0,0)
-SONIC_FILTER = MedianFilter(window_size=10)
+pid_forwards = PID(4, 0, 0)
+pid_backwards = PID(4,0,0)
+filter_for_distance = MedianFilter(window_size=10)
 
 # a com protecol using esp-now
-com = Coms(peer=b'\xc8\xf0\x9e\xf2X\xe8')
+now = Coms(peer=b'\xc8\xf0\x9e\xf2X\xe8')
 
-# FRONT or BACK Set where to line sensor is placed.
-SENSOR_PLACEMENT = "FRONT"  # or BACK
+def isCommand(msg: str) -> bool:
+    return msg.startswith(DASH_DATA_PREFIX)
 
-def drivePid(timout:float, speed: int):
+def onCommand(cmd:str):
+    # struct: prefix,SET/GET,WHAT,DATA
+    if not isCommand(cmd): return
+
+
+
+
+
+def drive_for(timout:float, speed: int):
+    pid_backwards.reset()
+
     start = time.ticks_ms()
-
     while time.ticks_diff(time.ticks_ms(), start) < (timout*1000):
         [A1, A2, A3, A4, A5] = LINE.read()
+        #TODO: Check if works when going backwards..
         inp = (-2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5) / 80
-        apt = pid.calc(inp)
+        apt = pid_backwards.calc(inp)
 
         DRIVER.drive(speed-apt, speed+apt)
         time.sleep_ms(50)
+
     DRIVER.drive(0,0)
-    print("done")
-        # leftSpeed = speed - output
-        # rightSpeed = speed + output
+
 
 def checkIfBoxEndpoint(Cpos,Npos):
     boxPickupMates = ["E:A", "F:B", "G:C", "H:D"]
     boxReleasemates = ["T:X", "U:Y", "V:Z", "W:AA"]
 
     if f"{Cpos}:{Npos}" in boxPickupMates:
-        return True
-    return False
+        return True, "PICK_BOX"
+
+    elif f"{Cpos}:{Npos}" in boxReleasemates:
+        return True, "RELEASE_BOX"
+
+    return False, "ERROR"
 
 
-def checkI2CDevices():
-    busB = [0x36]
-    busA = [0x36, 0xd, 0x20]
-
+def checkI2CDevices(send: bool = False):
     devicesA = I2CA.scan()
     devicesB = I2CB.scan()
 
-    print("DEBUGA", [hex(d) for d in devicesA])
-    print("DEBUGB", [hex(dc) for dc in devicesB])
-
-    found = 0
-    for addra in busA:
-        if addra not in devicesA:
-            print(hex(addra), "Expected, but not found in busA")
-        else:
-            found += 1
-
-    for addrb in busB:
-        if addrb not in devicesB:
-            print(hex(addrb), "Expected, but not found in busB")
-        else:
-            found += 1
-
-    return True if found == 4 else False
+    print("[debug] - I2CA Scan Result:", [hex(da) for da in devicesA])
+    print("[debug] - I2CB Scan Result:", [hex(db) for db in devicesB])
+    
+    if send: 
+        now.send(f"{ROBOT_DATA_PREFIX},SET,I2C_SCAN,{[devicesA, devicesB]}")
 
 
 getState = States(States.STOP)
@@ -122,7 +120,7 @@ endpoint = boxesToPick[1]
 
 cost, shortestPath, pathDirections = graph.dijkstra(startCel[0], endpoint)
 print(shortestPath, pathDirections)
-com.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
+now.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
 
 posIndx = 0
 currentPos = startCel[0]
@@ -168,10 +166,10 @@ while True:
     #     currentState = States.OBSTACLE
 
     if posIndx < len(shortestPath)-1:
-        com.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx +1]},{nodes[currentPos][shortestPath[posIndx+1]][1]},{currentHeading},{lineSensorData},{distance},{raw}")
+        now.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx +1]},{nodes[currentPos][shortestPath[posIndx+1]][1]},{currentHeading},{lineSensorData},{distance},{raw}")
         print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
     else:
-        com.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx]},{pathDirections[-1]},{currentHeading},{lineSensorData},{distance},{raw}")
+        now.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx]},{pathDirections[-1]},{currentHeading},{lineSensorData},{distance},{raw}")
         print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", pathDirections[-1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
 
     # Statemachine
@@ -353,7 +351,7 @@ while True:
 
             cost, shortestPath, pathDirections = graph.dijkstra(startCel[0], endpoint)
             print(shortestPath, pathDirections)
-            com.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
+            now.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
 
             posIndx = 0
             currentPos = startCel[0]
@@ -401,8 +399,8 @@ while True:
 
     DRIVER.drive(leftSpeed, rightSpeed)
 
-    if com.available():
-        mac, rev = com.recv(5)
+    if now.available():
+        mac, rev = now.recv(5)
         print("GOT", rev.decode("utf-8"), len(rev.decode("utf-8")), "isCommand", rev.decode().startswith(DASH_DATA_PREFIX))
         # print(rev[1].decode("utf-8"))
         # START_ROBOT = True
