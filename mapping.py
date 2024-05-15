@@ -28,7 +28,7 @@ class Length:
     x = 1
     x12 = 1 / 2
     x13 = 1 / 3
-    x16 = 1 / 6
+    x16 = 1 / 4
 
 class BoxPlaces:
     RED = "Y"
@@ -125,7 +125,7 @@ nodes: dict[str, dict[str, list[float, str]]] = {
         "O": [Length.x16, Heading.SOUTH]
     },
     "M": {
-        "E": [Length.x12, Heading.SOUTH],
+        "E": [Length.x12, Heading.NORTH],
         "N": [Length.x, Heading.EAST],
         "P": [Length.x16, Heading.SOUTH]
     },

@@ -8,7 +8,7 @@ from docopt import docopt
 from ampy.pyboard import Pyboard
 from ampy.files import Files, DirectoryExistsError
 
-port = "COM3"
+port = "COM4"
 
 board = Pyboard(port)
 files = Files(board)

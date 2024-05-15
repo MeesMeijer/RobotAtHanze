@@ -169,7 +169,7 @@ nodes: dict[str, dict[str, list[float, str]]] = {
         "O": [Length.x16, Heading.SOUTH]
     },
     "M": {
-        "E": [Length.x12, Heading.SOUTH],
+        "E": [Length.x12, Heading.NORTH],
         "N": [Length.x, Heading.EAST],
         "P": [Length.x16, Heading.SOUTH]
     },

@@ -10,6 +10,7 @@ class States:
     PICK_UP_BOX = "PICK_UP_BOX"
     GO_TO_GOAL = "GO_TO_GOAL"
     AT_GOAL = "AT_GOAL"
+    RELEASE_BOX = "RELEASE_BOX"
 
     statesByBooleans = {
         (0, 0, 1, 0, 0):  STRAIGHT,      # (0, 0, 1, 0, 0)
