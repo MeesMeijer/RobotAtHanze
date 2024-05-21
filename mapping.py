@@ -87,7 +87,7 @@ nodes: dict[str, dict[str, list[float, str]]] = {
     },
     "E": {
         "F": [Length.x16, Heading.EAST],
-        "M": [Length.x12, Heading.NORTH],
+        "M": [Length.x12, Heading.SOUTH],
         "A": [Length.x13, Heading.NORTH]
     },
     "F": {
@@ -243,8 +243,30 @@ plottingData = {
 }
 
 class Graph:
+
+    blockWeight = 1e25
     def __init__(self, nodes):
         self.nodes = nodes
+
+    def getBlocks(self) -> list[str]:
+        blockedNodes = []
+        for node in self.nodes:
+            for neighbor, (weight, _) in self.nodes[node].items():
+                if weight >= self.blockWeight:
+                    t1, t2 = f"{node}-{neighbor}", f"{neighbor}-{node}"
+                    if t1 not in blockedNodes or t2 not in blockedNodes:
+                        blockedNodes.append(t1)
+
+        return blockedNodes
+
+    def setBlocks(self, blocks: str | list[str]):
+        if isinstance(blocks, str):
+            blocks = [blocks]
+
+        for block in blocks:
+            A,B = block.split("-")
+            self.nodes[A][B] = self.blockWeight
+            self.nodes[B][A] = self.blockWeight
 
     def dijkstra(self, start, end):
         # Initialize distances and paths to all nodes
@@ -284,21 +306,10 @@ class Graph:
 
         return shortest_distance, shortest_path, direction_list
 
-    def BlockConnection(self, A: str, B: str):
-        self.nodes[A][B][0] = 1e25
-        self.nodes[B][A][0] = 1e25
-
     def clearBlocks(self, nodes):
         self.nodes = nodes
 
 # graph = Graph(nodes)
-
-# graph.BlockConnection("K", "N")
-# graph.BlockConnection("N", "Q")
-# graph.BlockConnection("J", "L")
-# graph.BlockConnection("O", "W")
-# graph.BlockConnection("E", "M")
-# graph.BlockConnection("R", "S")
 
 # Example usage: find the shortest distance between nodes "A" and "Z"
 # start_node = "A"

@@ -30,7 +30,11 @@ class States:
         (1, 1, 1, 1, 0):  LEFT_CORNER,   # (1, 1, 1, 1, 0)
         # (1, 1, 1, 0, 0): LEFT_CORNER,
         (0, 0, 0, 0, 0):  STOP,           # (0, 0, 0, 0, 0),
-        (1, 1, 1, 1, 1): T_CROSS
+        (1, 1, 1, 1, 1): T_CROSS,
+        (1, 0, 1, 0, 0): LEFT_CORNER,
+        (0, 0, 1, 0, 1): RIGHT_CORNER,
+        (1, 0, 0, 1, 0): LEFT_CORNER,
+        (0, 1, 0, 0, 1): RIGHT_CORNER
     }
 
     currentState = STOP

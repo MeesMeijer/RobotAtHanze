@@ -1,6 +1,7 @@
 import espnow
 import network
 
+ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", "<"
 
 class Coms:
 
@@ -31,7 +32,7 @@ class Coms:
 
         for p in self.peers:
             # print(f"Sending data packet to {bytes(p)}")
-            self.esp.send(p, msg)
+            self.esp.send(p, f"{ROBOT_DATA_PREFIX},{msg}")
 
     def write(self, *args):
         return self.send(str(args))

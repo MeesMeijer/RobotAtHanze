@@ -63,7 +63,8 @@ def isCommand(msg: str) -> bool:
 
 def onCommand(cmd:str):
     # struct: prefix,SET/GET,WHAT,DATA
-    if not isCommand(cmd): return
+    if not isCommand(cmd):
+        return None
 
 
 def drive_for(timout:float, speed: int):
@@ -75,12 +76,6 @@ def drive_for(timout:float, speed: int):
         #TODO: Check if works when going backwards..
         inp = (-2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5) / 80
         apt = pid_backwards.calc(inp)
-
-        # if speed < 0:
-            # add = [30, -25]
-        # else:
-        #     add = [15,0]
-
         DRIVER.drive(speed-apt, speed+apt)
         time.sleep_ms(10)
 
@@ -108,7 +103,7 @@ def checkI2CDevices(send: bool = False):
     print("[debug] - I2CB Scan Result:", [hex(db) for db in devicesB])
     
     if send: 
-        now.send(f"{ROBOT_DATA_PREFIX},SET,I2C_SCAN,{[devicesA, devicesB]}")
+        now.send(f"{ROBOT_DATA_PREFIX},I2C_SCAN,{[devicesA, devicesB]}")
 
 
 getState = States(States.STOP)
@@ -136,15 +131,15 @@ force = False
 graph = Graph(nodes)
 
 startCel = ["J", "I"]
-endpoint = boxesToPick[0]
-
-# graph.BlockConnection("W", "V")
+endpoint = boxesToPick.pop()
 
 cost, shortestPath, pathDirections = graph.dijkstra(startCel[0], endpoint)
 print(shortestPath, pathDirections)
 
-now.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
+now.send(f"CURRENT_PATH,{shortestPath},BLOCKS,{graph.getBlocks()}")
+
 hasBox = False
+isBoxTurn = False
 posIndx = 0
 currentPos = startCel[0]
 currentHeading = nodes[startCel[0]][startCel[1]][1]
@@ -174,8 +169,7 @@ while True:
     # UPDATE currentState with the IR sensor data
     sensorState = getState[sensorsByBooleans]
     if nextState is not None:
-        currentState, currentPos = nextState, nextPos
-        currentHeading = nextHeading
+        currentState, currentPos, currentHeading = nextState, nextPos, nextHeading
         nextPos, nextHeading, nextState = None, None, None
     else:
         if nextPos:
@@ -199,12 +193,12 @@ while True:
     #     currentState = States.OBSTACLE
 
     if posIndx < len(shortestPath) - 1:
-        print(f"{currentPos} to {shortestPath[posIndx +1]}")
-        now.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx +1]},{nodes[currentPos][shortestPath[posIndx+1]][1]},{currentHeading},{lineSensorData},{distance},{raw}")
+        # print(f"{currentPos} to {shortestPath[posIndx +1]}")
+        now.send(f"{currentState},{currentPos},{shortestPath[posIndx+1]},{nodes[currentPos][shortestPath[posIndx+1]][1]},{currentHeading},{lineSensorData},{distance},{raw}")
         print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
     else:
-        print(f"{currentPos} to {shortestPath[posIndx]}")
-        now.send(f"{ROBOT_DATA_PREFIX},{currentState},{currentPos},{shortestPath[posIndx]},{pathDirections[-1]},{currentHeading},{lineSensorData},{distance},{raw}")
+        # print(f"{currentPos} to {shortestPath[posIndx]}")
+        now.send(f"{currentState},{currentPos},{shortestPath[posIndx]},{pathDirections[-1]},{currentHeading},{lineSensorData},{distance},{raw}")
         print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", pathDirections[-1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
 
     # Statemachine
@@ -236,7 +230,7 @@ while True:
             MovingAverage = -2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5
             output = pid_forwards.calc(MovingAverage / 70)
 
-            x = 60 if not hasBox else 80
+            x = 57 if not hasBox else 80
             leftSpeed = x - output
             rightSpeed = x + output
 
@@ -247,13 +241,14 @@ while True:
 
             desiredState = None
             isBoxPickUpState, type = checkIfBoxEndpoint(shortestPath[posIndx], shortestPath[-1])
+            isBoxTurn = isBoxPickUpState
+
             if isBoxPickUpState and type == 'PICK_BOX':
                 desiredState = States.PICK_UP_BOX
             elif isBoxPickUpState and type == "RELEASE_BOX":
                 desiredState = States.RELEASE_BOX
 
             nextPos, nextHeading, nextState = currentPos, currentHeading, desiredState
-            IntersectionBuStraightLeft, IntersectionBuStraightRight = False, False
 
         fromTCross = False
 
@@ -266,7 +261,7 @@ while True:
             # TODO: Check if works with the new setup
             if time.ticks_diff(time.ticks_ms(), timeToIntersection) < 0.4 * 1000:
                 print("this is duplicate", time.ticks_diff(time.ticks_ms(), timeToIntersection))
-                IntersectionBuStraightLeft = True
+                IntersectionButStraight = True
                 nextPos, nextHeading, nextState = currentPos, currentHeading, States.STRAIGHT
             else:
                 posIndx += 1
@@ -300,15 +295,17 @@ while True:
                     print("turning left ")
                     if not force:
                         # drive_for(0.5, 60)
+                        # if isBoxTurn:
                         DRIVER.drive(45,45)
-                        time.sleep(0.4)
+                        time.sleep(0.45 if isBoxTurn else 0.3)
+                        isBoxTurn = False
 
-                    DRIVER.drive(-70 if hasBox else -60, 70 if hasBox else 60)
-                    time.sleep(0.3)
+                    DRIVER.drive(-50, 90)
+                    time.sleep(0.5)
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-                    while not lineData[3]:
-                        DRIVER.drive(-80 if hasBox else -60, 80 if hasBox else 60)
+                    while not lineData[1]:
+                        DRIVER.drive(-45, 70)
                         # DRIVER.drive(-80, 80)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     filter_for_distance.reset(120)
@@ -319,14 +316,15 @@ while True:
 
                     if not force:
                         DRIVER.drive(45,45)
-                        time.sleep(0.4)
+                        time.sleep(0.45 if isBoxTurn else 0.3)
+                        isBoxTurn = False
 
-                    DRIVER.drive(80 if hasBox else 60, -70 if hasBox else -60)
-                    time.sleep(0.3)
+                    DRIVER.drive(90, -60)
+                    time.sleep(0.5)
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-                    while not lineData[2]:
-                        DRIVER.drive(80 if hasBox else 60, -80 if hasBox else -60)
+                    while not lineData[3]:
+                        DRIVER.drive(60, -68)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     filter_for_distance.reset(120)
                     nextState = States.STRAIGHT
@@ -340,7 +338,7 @@ while True:
     elif currentState == States.RELEASE_BOX:
         print("Releasing the box")
 
-        drive_for(0.4, 45)
+        drive_for(0.6, 45)
 
         MAGNET.value(0)
 
@@ -348,49 +346,62 @@ while True:
         endpoint = boxesToPick.pop()
 
         cost, shortestPath, pathDirections = graph.dijkstra(startCel[0], endpoint)
-        now.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
+        now.send(f"CURRENT_PATH,{shortestPath},BLOCKS,{graph.getBlocks()}")
 
         posIndx = 0
         currentPos = startCel[0]
         currentHeading = nodes[startCel[1]][startCel[0]][1]
 
+        desiredPos = shortestPath[posIndx + 1]
         desiredHeading = nodes[shortestPath[1]][shortestPath[2]][1]
         desiredState = HeadingsToState[currentHeading][desiredHeading]
 
-        print(shortestPath, desiredState, desiredHeading)
-
-        DRIVER.drive(-70,-70)
-        time.sleep(0.2)
-
-        DRIVER.drive(speed[0], speed[1])
-        time.sleep(0.55)
-
+        print(shortestPath, desiredState, f"{currentHeading}:{desiredHeading}", f"{currentPos} -> {desiredPos}")
         DRIVER.drive(-70,-70)
         time.sleep(0.1)
 
+        if desiredState == States.RIGHT_CORNER:
+            DRIVER.drive(30, -80)
+        elif desiredState == States.LEFT_CORNER:
+            DRIVER.drive(-80, 35)
+        elif desiredState == States.TURN_AROUND:
+            DRIVER.drive(-75,-60)
+
+        time.sleep(0.50)
+
+        DRIVER.drive(-70, -70)
+        time.sleep(0.1)
+
         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        while not lineData[2]:
-            if nextState == States.RIGHT_CORNER:
-                DRIVER.drive(-80,0)
-            elif nextState == States.TURN_AROUND or nextState == States.LEFT_CORNER:
-                DRIVER.drive(0, -80)
+        num = 3
+        if desiredState in [States.LEFT_CORNER, States.TURN_AROUND]:
+            num = 1
+
+        while not lineData[num]:
+            if desiredState == States.RIGHT_CORNER:
+                DRIVER.drive(0,-80)
+            elif desiredState == States.TURN_AROUND or nextState == States.LEFT_CORNER:
+                DRIVER.drive(-80, 10)
 
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-
         DRIVER.drive(0,0)
 
+        currentPos = desiredPos
+        currentHeading = desiredHeading
+
+        # print("After turn: ", currentPos, currentHeading)
+
         posIndx += 1
-        currentPos = shortestPath[posIndx]
-        desiredPos = shortestPath[posIndx + 1]
-        desiredHeading = nodes[shortestPath[posIndx]][desiredPos][1]
-        desiredState = HeadingsToState[nextHeading][desiredHeading]
+        desiredPos = shortestPath[posIndx+1]
+        desiredHeading = nodes[currentPos][desiredPos][1]
+        desiredState = HeadingsToState[currentHeading][desiredHeading]
 
-        nextPos, nextState, nextHeading = desiredPos, desiredState, desiredHeading
-
+        nextPos, nextState, nextHeading = shortestPath[posIndx], desiredState, desiredHeading
+        print(f"pos: {currentPos}->{desiredPos}, head: {currentHeading}->{desiredHeading}")
         force = True
         hasBox = False
 
-        print(nextPos, nextHeading, nextState)
+        # print(nextPos, nextHeading, nextState)
 
     elif currentState == States.PICK_UP_BOX:
         print("Pick the box")
@@ -405,7 +416,7 @@ while True:
         endpoint = temp[str(color)]
 
         cost, shortestPath, pathDirections = graph.dijkstra(startCel[0], endpoint)
-        now.send(f"{ROBOT_DATA_PREFIX},CURRENT_PATH,{shortestPath}")
+        now.send(f"CURRENT_PATH,{shortestPath}")
 
         posIndx = 0
         currentPos = startCel[0]
@@ -422,41 +433,49 @@ while True:
 
         if desiredState == States.RIGHT_CORNER:
             DRIVER.drive(30, -80)
-        else:
+        elif desiredState == States.LEFT_CORNER:
             DRIVER.drive(-80, 30)
+        elif desiredState == States.TURN_AROUND:
+            DRIVER.drive(-75,-60)
 
         time.sleep(0.55)
 
-        DRIVER.drive(-70,-70)
+        DRIVER.drive(-70, -70)
         time.sleep(0.1)
 
         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-        while not lineData[2]:
+        num = 3
+        if desiredState in [States.LEFT_CORNER, States.TURN_AROUND]:
+            num = 1
+
+        while not lineData[num]:
             if desiredState == States.RIGHT_CORNER:
                 DRIVER.drive(0,-80)
             elif desiredState == States.TURN_AROUND or nextState == States.LEFT_CORNER:
-                DRIVER.drive(-80, 0)
+                DRIVER.drive(-80, 10)
 
             lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
-
         DRIVER.drive(0,0)
 
         currentPos = desiredPos
         currentHeading = desiredHeading
 
-        print("After turn: ", currentPos, currentHeading)
+        # print("After turn: ", currentPos, currentHeading)
 
-        posIndx += 2
-        desiredPos = shortestPath[posIndx]
+        posIndx += 1
+        desiredPos = shortestPath[posIndx+1]
         desiredHeading = nodes[currentPos][desiredPos][1]
         desiredState = HeadingsToState[currentHeading][desiredHeading]
 
-        nextPos, nextState, nextHeading = desiredPos, desiredState, desiredHeading
+        nextPos, nextState, nextHeading = shortestPath[posIndx], desiredState, desiredHeading
 
+        print(f"pos: {currentPos}->{desiredPos}, head: {currentHeading}->{desiredHeading}")
         force = True
         hasBox = False
 
+        timeToIntersection = time.ticks_ms()
         print(nextPos, nextHeading, nextState)
+        # raise Exception("te")
 
     elif currentState == States.OBSTACLE:
 

@@ -131,7 +131,7 @@ nodes: dict[str, dict[str, list[float, str]]] = {
     },
     "E": {
         "F": [Length.x16, Heading.EAST],
-        "M": [Length.x12, Heading.NORTH],
+        "M": [Length.x12, Heading.SOUTH],
         "A": [Length.x13, Heading.NORTH]
     },
     "F": {
