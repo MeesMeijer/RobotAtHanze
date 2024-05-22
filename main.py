@@ -18,8 +18,8 @@ frequency = 15000
 WHITE_THRESHOLD = 850
 ROBOT_DATA_PREFIX, DASH_DATA_PREFIX = ">", "<"
 
-I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 I2CB = machine.I2C(1, sda=Pin(SDA2), scl=Pin(SCL2))
+I2CA = machine.I2C(0, sda=Pin(SDA), scl=Pin(SCL))
 
 MCP = MCP23017(I2CA, 0x20)
 
@@ -51,7 +51,7 @@ TCS = TCS3200(MCP, S2, S3, LED, Pin(OUT, Pin.IN, Pin.PULL_UP))
 
 pid_forwards = PID(4, 0, 0)
 pid_backwards = PID(4,0,0)
-filter_for_distance = MedianFilter(window_size=10)
+filter_for_distance = MedianFilter(window_size=20)
 
 # a com protecol using esp-now
 now = Coms(peer=b'\xc8\xf0\x9e\xf2X\xe8')
@@ -113,10 +113,11 @@ temp = {
     "B": "F",
     "C": "G",
     "D": "H",
+
     "AA": "W",
-    "X": "V",
+    "X": "T",
     "Y": "U",
-    "Z": "T",
+    "Z": "V",
     "Blue": BoxPlaces.BLUE,
     "Green": BoxPlaces.GREEN,
     "Red": BoxPlaces.RED,
@@ -191,15 +192,16 @@ while True:
 
     # if distance < 15:
     #     currentState = States.OBSTACLE
+    #     filter_for_distance.reset(200)
 
     if posIndx < len(shortestPath) - 1:
         # print(f"{currentPos} to {shortestPath[posIndx +1]}")
         now.send(f"{currentState},{currentPos},{shortestPath[posIndx+1]},{nodes[currentPos][shortestPath[posIndx+1]][1]},{currentHeading},{lineSensorData},{distance},{raw}")
-        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
+        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx +1], "), Head:", nodes[currentPos][shortestPath[posIndx+1]][1], "->", currentHeading, f" ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
     else:
         # print(f"{currentPos} to {shortestPath[posIndx]}")
         now.send(f"{currentState},{currentPos},{shortestPath[posIndx]},{pathDirections[-1]},{currentHeading},{lineSensorData},{distance},{raw}")
-        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", pathDirections[-1], "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
+        print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", pathDirections[-1], "->", currentHeading, f" ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
 
     # Statemachine
     if currentState == States.STOP:
@@ -230,7 +232,7 @@ while True:
             MovingAverage = -2 * A1 - 1.5 * A2 + 0 * A3 + 1.5 * A4 + 2 * A5
             output = pid_forwards.calc(MovingAverage / 70)
 
-            x = 57 if not hasBox else 80
+            x = 60 if not hasBox else 80
             leftSpeed = x - output
             rightSpeed = x + output
 
@@ -239,10 +241,11 @@ while True:
             else:
                 desiredPos = shortestPath[posIndx]
 
-            desiredState = None
+
             isBoxPickUpState, type = checkIfBoxEndpoint(shortestPath[posIndx], shortestPath[-1])
             isBoxTurn = isBoxPickUpState
 
+            desiredState = None
             if isBoxPickUpState and type == 'PICK_BOX':
                 desiredState = States.PICK_UP_BOX
             elif isBoxPickUpState and type == "RELEASE_BOX":
@@ -280,8 +283,6 @@ while True:
                     print(f"State is: {currentState} But iam going: {desiredState}")
                     if desiredState == States.STRAIGHT:
                         IntersectionButStraight = True
-                # else:
-                    # desiredState = currentState
 
                 timeToIntersection = time.ticks_ms() if not force else None
 
@@ -291,11 +292,8 @@ while True:
                     nextState = States.RELEASE_BOX
 
                 elif desiredState == States.LEFT_CORNER:
-                    # print("turning left ")
                     print("turning left ")
                     if not force:
-                        # drive_for(0.5, 60)
-                        # if isBoxTurn:
                         DRIVER.drive(45,45)
                         time.sleep(0.45 if isBoxTurn else 0.3)
                         isBoxTurn = False
@@ -305,8 +303,7 @@ while True:
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     while not lineData[1]:
-                        DRIVER.drive(-45, 70)
-                        # DRIVER.drive(-80, 80)
+                        DRIVER.drive(-65, 73)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     filter_for_distance.reset(120)
                     nextState = States.STRAIGHT
@@ -324,7 +321,7 @@ while True:
 
                     lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     while not lineData[3]:
-                        DRIVER.drive(60, -68)
+                        DRIVER.drive(73, -75)
                         lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
                     filter_for_distance.reset(120)
                     nextState = States.STRAIGHT
@@ -338,7 +335,7 @@ while True:
     elif currentState == States.RELEASE_BOX:
         print("Releasing the box")
 
-        drive_for(0.6, 45)
+        drive_for(0.4, 45)
 
         MAGNET.value(0)
 
@@ -365,9 +362,9 @@ while True:
         elif desiredState == States.LEFT_CORNER:
             DRIVER.drive(-80, 35)
         elif desiredState == States.TURN_AROUND:
-            DRIVER.drive(-75,-60)
+            DRIVER.drive(-60,60)
 
-        time.sleep(0.50)
+        time.sleep(0.30)
 
         DRIVER.drive(-70, -70)
         time.sleep(0.1)
@@ -411,6 +408,7 @@ while True:
         MAGNET.value(1)
 
         print((color := TCS.detectColor()))
+        print(TCS.rgb())
 
         startCel = [endpoint, temp[endpoint]]
         endpoint = temp[str(color)]
@@ -436,7 +434,7 @@ while True:
         elif desiredState == States.LEFT_CORNER:
             DRIVER.drive(-80, 30)
         elif desiredState == States.TURN_AROUND:
-            DRIVER.drive(-75,-60)
+            DRIVER.drive(-60,60)
 
         time.sleep(0.55)
 
@@ -471,7 +469,7 @@ while True:
 
         print(f"pos: {currentPos}->{desiredPos}, head: {currentHeading}->{desiredHeading}")
         force = True
-        hasBox = False
+        hasBox = True
 
         timeToIntersection = time.ticks_ms()
         print(nextPos, nextHeading, nextState)
@@ -487,11 +485,36 @@ while True:
             A, B = currentPos, shortestPath[posIndx]
             headingAB = pathDirections[-1]
             # print("State: ", currentState, ", (", currentPos, ":", shortestPath[posIndx], "), Head:", , "->", currentHeading, " ", [int(x) for x in sensorsByBooleans], " ", lineSensorData, sep="")
-
+        graph.setBlocks(f"{A}-{B}")
         print(f"detected a obstacle between {A}:{B}")
-        print(f"currentHeading: {currentHeading}, turn with heading: {nodes[B][A][1]}, from {B}:{A}, with state: {HeadingsToState[currentHeading][nodes[B][A][1]]}")
 
-        nextPos, nextState, nextHeading = A, HeadingsToState[currentHeading][nodes[B][A][1]], nodes[B][A][1]
+        cost, path, dirs = graph.dijkstra(A, endpoint)
+
+        print("TURN AROUND")
+
+        lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
+        while not lineData[1]:
+            DRIVER.drive(-85, 80)
+            lineData = LINE.read().toBooleans(WHITE_THRESHOLD)
+        DRIVER.drive(0,0)
+
+        currentPos = B
+        currentHeading = nodes[B][A][1]
+
+        print(f"New path: {path}, old path: {shortestPath}")
+
+        posIndx = 0
+        desiredPos = path[posIndx + 1]
+        desiredHeading = nodes[path[0]][path[1]][1]
+        desiredState = HeadingsToState[currentHeading][desiredHeading]
+
+        print(f"nextpos: {path[0]} next intersection: {desiredState}")
+        print(shortestPath, desiredState, f"{currentHeading}:{desiredHeading}", f"{currentPos} -> {desiredPos}")
+
+        shortestPath = path
+        nextPos, nextState, nextHeading = shortestPath[posIndx], desiredState, desiredHeading
+        force = True
+
     elif currentState == States.TURN_AROUND:
         # if SENSOR_PLACEMENT == "FRONT":
         print("turning AROAUND")

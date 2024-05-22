@@ -41,6 +41,7 @@ class BoxPlaces:
     C = "C"
     D = "D"
 
+
 #   N
 # W   E
 #   S
@@ -265,8 +266,8 @@ class Graph:
 
         for block in blocks:
             A,B = block.split("-")
-            self.nodes[A][B] = self.blockWeight
-            self.nodes[B][A] = self.blockWeight
+            self.nodes[A][B][0] = self.blockWeight
+            self.nodes[B][A][0] = self.blockWeight
 
     def dijkstra(self, start, end):
         # Initialize distances and paths to all nodes
