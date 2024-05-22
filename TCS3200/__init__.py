@@ -41,6 +41,19 @@ class TCS3200:
         )
 
     def detectColor(self):
-        colors = ["Red", "Green", "Blue"]
+        colors = ["Red", "Green", "Blue", "Black"]
+
         values = self.rgb()
-        return colors[values.index(max(values))]
+        _1000 = [x < 1000 for x in values]
+        _2000 = [x < 2000 for x in values]
+
+        if sum(_1000) == 3:
+            return colors[3]
+
+        if sum(_2000) == 2 and values.index(max(values)) == 2:
+            return colors[2]
+
+        elif values.index(max(values)) == 0:
+            return colors[0]
+
+        return colors[1]
