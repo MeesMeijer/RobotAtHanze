@@ -48,13 +48,10 @@ class RobotDataEvent(wx.PyEvent):
 
                 list_pattern = re.compile(r"\[.*?\]")
                 lists = list_pattern.findall(data)
-
-                # Convert the matched strings to Python lists
-                current_path_list = eval(lists[0])  # This will be ['J', 'I', 'H', 'G', 'F', 'E', 'A']
-                # blocks_list = eval(lists[1])  # This will be []
+                current_path_list = eval(lists[0])
 
                 self.path = current_path_list
-                # print(self.path, len(self.path))
+
 
 
 class WorkerThread(Thread):

@@ -534,15 +534,8 @@ while True:
         # posIndx += 1
         nextPos, nextState, nextHeading = currentPos, States.STRAIGHT, Heading.EAST
 
-    prevReadings = sensorsByBooleans
-
     DRIVER.drive(leftSpeed, rightSpeed)
 
     if now.available():
         mac, rev = now.recv(5)
         print("GOT", rev.decode("utf-8"), len(rev.decode("utf-8")), "isCommand", rev.decode().startswith(DASH_DATA_PREFIX))
-        # print(rev[1].decode("utf-8"))
-        # START_ROBOT = True
-
-#         # ints = int(rev[1].decode("utf-8").split(":")[1]) + 1
-    # time.sleep_ms(20)

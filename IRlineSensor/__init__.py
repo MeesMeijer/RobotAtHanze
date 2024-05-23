@@ -5,8 +5,6 @@ def normalize(x: int):
     return (x - 0) * (1000 - 0) // (65535 - 0) + 0
 
 
-
-
 class readData:
     def __init__(self, data):
         self.data = data
