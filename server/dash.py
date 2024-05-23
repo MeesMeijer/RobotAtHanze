@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from threading import *
 import mapping
+import json
 
 import serial
 
@@ -24,15 +25,36 @@ class RobotDataEvent(wx.PyEvent):
         self.error = error
         self.data = data
 
-        # if not error and data.startswith(ROBOT_DATA_PREFIX):
-        #     print("proceed with the data")
-        #     self.currentState = ""
-        #     self.currentPos = ""
-        #     self.currentHeading = ""
-        #
-        #     self.nextState = ""
-        #     self.nextPos = ""
-        #     self.nextHeading = ""
+        self.any = False
+        self.path = []
+
+        if data.startswith(ROBOT_DATA_PREFIX):
+            arr = data.removeprefix(">,").split(",")
+
+
+            if arr[0] != "CURRENT_PATH":
+                self.any = True
+                self.currentState = arr[0].strip()
+                self.currentPos = arr[1].strip()
+                self.nextPos = arr[2].strip()
+
+                self.currentHeading = arr[3].strip()
+                self.nextHeading = arr[4].strip()
+                self.nextState = mapping.HeadingsToState[self.currentHeading][self.nextHeading]
+
+
+            if arr[0] == "CURRENT_PATH":
+                import re
+
+                list_pattern = re.compile(r"\[.*?\]")
+                lists = list_pattern.findall(data)
+
+                # Convert the matched strings to Python lists
+                current_path_list = eval(lists[0])  # This will be ['J', 'I', 'H', 'G', 'F', 'E', 'A']
+                # blocks_list = eval(lists[1])  # This will be []
+
+                self.path = current_path_list
+                # print(self.path, len(self.path))
 
 
 class WorkerThread(Thread):
@@ -47,31 +69,31 @@ class WorkerThread(Thread):
         self.start()
 
     def run(self):
-        try:
-            serialConnection = serial.Serial(self.port, 115200)
+        # try:
+        serialConnection = serial.Serial(self.port, 115200)
 
-            while True: 
-                if serialConnection.in_waiting > 0: 
-                    recvData = serialConnection.readline().decode().strip()
-                    print("[debug] - Got data from port:", self.port ,"\n -->", recvData)
-                    wx.PostEvent(self.frame, RobotDataEvent(False, recvData))
+        while True:
+            if serialConnection.in_waiting > 0:
+                recvData = serialConnection.readline().decode().strip()
+                print("[debug] - Got data from port:", self.port ,"\n -->", recvData)
+                wx.PostEvent(self.frame, RobotDataEvent(False, recvData))
 
-                if len(self.dataTosend) > 0: 
-                    for _ in range(len(self.dataTosend)): 
-                        msg = self.dataTosend.pop(0)
-                        print(f"[debug] - Sending {len(msg)} bytes. \n -->", msg)
-                        serialConnection.write(DASH_DATA_PREFIX.encode() + msg.encode() + b"\n")
-                    
-                if self._want_abort: 
-                    print("[debug] - Abort is requested.")
-                    serialConnection.close()
-                    self.dead = True
-                    return wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to aborting"))
-        
-        except Exception as e: 
-            print("ERROR FROM WORKER.RUN", e)
-            wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to error. "))
-            self.dead = True
+            if len(self.dataTosend) > 0:
+                for _ in range(len(self.dataTosend)):
+                    msg = self.dataTosend.pop(0)
+                    print(f"[debug] - Sending {len(msg)} bytes. \n -->", msg)
+                    serialConnection.write(DASH_DATA_PREFIX.encode() + msg.encode() + b"\n")
+
+            if self._want_abort:
+                print("[debug] - Abort is requested.")
+                serialConnection.close()
+                self.dead = True
+                return wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to aborting"))
+
+        # except Exception as e:
+        #     print("ERROR FROM WORKER.RUN", e)
+        #     wx.PostEvent(self.frame, RobotDataEvent(True, "Closed due to error. "))
+        #     self.dead = True
 
     def abort(self):
         self._want_abort = True
@@ -301,14 +323,11 @@ class RealTimePlot(wx.Frame):
 
             dialog.Destroy()
 
-
-    def ResetUI():
+    def ResetUI(self):
         pass 
 
-    def ResetPlot():
+    def ResetPlot(self):
         pass 
-
-
 
     def InitUI(self):
         panel = wx.Panel(self)
@@ -321,7 +340,7 @@ class RealTimePlot(wx.Frame):
         
         self.fig, self.ax = plt.subplots()
         self.canvas = FigureCanvas(panel, -1, self.fig)
-        
+
         v1.Add(self.canvas, 1, wx.EXPAND | wx.ALL, 10)
 
         # Evertthin in V2             
@@ -489,18 +508,43 @@ class RealTimePlot(wx.Frame):
         if data.error:
             data.data = "[ERROR] - " + data.data
 
+        if data.path:
+            print("Set path")
+            self.SetShortedPath(data.path)
+
+        if data.any:
+            self.currentPos.SetLabel(data.currentPos)
+            self.currentState.SetLabel(data.currentState)
+            self.currentHeading.SetLabel(data.currentHeading)
+
+            self.nextState.SetLabel(data.nextState)
+            self.nextHeading.SetLabel(data.nextHeading)
+            self.nextPos.SetLabel(data.nextPos)
+
+            print("Set pos")
+            self.SetRobotPos((data.currentPos, data.nextPos))
+        else:
+            self.currentPos.SetLabel("N/A")
+            self.currentState.SetLabel("N/A")
+            self.currentHeading.SetLabel("N/A")
+
+            self.nextState.SetLabel("N/A")
+            self.nextHeading.SetLabel("N/A")
+            self.nextPos.SetLabel("N/A")
+
+        self.canvas.draw()
+
         self.textbox.AppendText(data.data + '\n')
         # self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
-
         if self.autoscroll:
             self.textbox.SetInsertionPointEnd()
+
 
 
         
     def InitPlot(self):
         # TODO: Remove this
         self.autoscroll = True
-
 
         self.xdataPoints = [coord[0] for coord in mapping.plottingData.values()]
         self.ydataPoints = [coord[1] for coord in mapping.plottingData.values()]
@@ -516,6 +560,7 @@ class RealTimePlot(wx.Frame):
             self.ax.text(x+1/20, y+1/20, letter, fontsize=12, ha='center', va='center')
     
         self.ax.grid()
+
         
         # self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=13, interval=1000)
     
