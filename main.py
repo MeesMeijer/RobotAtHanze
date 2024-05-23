@@ -152,6 +152,8 @@ startState = HeadingsToState[currentHeading][ nodes[shortestPath[0]][shortestPat
 START_ROBOT = True
 # MAGNET.value(1)
 
+# TODO: CHeck if going backwards will help.
+
 timeToIntersection = 0
 fromTCross = False
 IntersectionButStraight = False
