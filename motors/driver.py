@@ -33,16 +33,18 @@ class MotorDriver:
         self._leftMotor.setState(leftState)
         # TODO: Check of this works...
         if self.__kickstartThreshold > leftSpeed > 0:
-            self._leftMotor.setSpeed(70)
+            self._leftMotor.setSpeed(100)
             time.sleep_ms(self.__kickStartTime)
         self._leftMotor.setSpeed(leftSpeed)
 
         self._rightMotor.setState(rightState)
         #TODO: Same for here..
         if self.__kickstartThreshold > rightSpeed > 0:
-            self._rightMotor.setSpeed(70)
+            self._rightMotor.setSpeed(100)
             time.sleep_ms(self.__kickStartTime)
         self._rightMotor.setSpeed(rightSpeed)
+
+        # print(leftSpeed,leftState,  rightSpeed, rightState)
 
     def __sign(self, x: float) -> int:
         if x < 0: return -1

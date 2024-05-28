@@ -27,12 +27,32 @@ class RobotDataEvent(wx.PyEvent):
 
         self.any = False
         self.path = []
+        self.blocked = []
+        self.magnet = False
+        self.color = None
 
         if data.startswith(ROBOT_DATA_PREFIX):
             arr = data.removeprefix(">,").split(",")
 
+            if arr[0] == "MAGNET_STATUS":
+                self.magnet = bool(arr[1])
 
-            if arr[0] != "CURRENT_PATH":
+            elif arr[0] == "BOX_COLOR":
+                print("Got Color")
+                self.color = str(arr[1].strip()).capitalize()
+
+            elif arr[0] == "CURRENT_PATH":
+                import re
+
+                list_pattern = re.compile(r"\[.*?\]")
+                lists = list_pattern.findall(data)
+                current_path_list = eval(lists[0])
+                block_list = eval(lists[1])
+
+                self.path = current_path_list
+                self.blocked = block_list
+
+            elif arr[0] != "CURRENT_PATH":
                 self.any = True
                 self.currentState = arr[0].strip()
                 self.currentPos = arr[1].strip()
@@ -43,14 +63,7 @@ class RobotDataEvent(wx.PyEvent):
                 self.nextState = mapping.HeadingsToState[self.currentHeading][self.nextHeading]
 
 
-            if arr[0] == "CURRENT_PATH":
-                import re
 
-                list_pattern = re.compile(r"\[.*?\]")
-                lists = list_pattern.findall(data)
-                current_path_list = eval(lists[0])
-
-                self.path = current_path_list
 
 
 
@@ -291,13 +304,13 @@ class RealTimePlot(wx.Frame):
             self.robotPortConnect.SetName("CONNECT")
             self.robotPortConnect.SetLabel("Connect")
 
-        elif eventName == "START_ROBOT":
+        elif eventName == "start_robot":
             if self.worker and not self.worker.dead:
                 self.worker.dataTosend.append("START_ROBOT")
             else: 
                 print("[error] - Trying to send commands, but not connected..")
                 
-        elif eventName == "STOP_ROBOT":
+        elif eventName == "stop_robot":
             if self.worker and not self.worker.dead:
                 self.worker.dataTosend.append("STOP_ROBOT")
             else:
@@ -370,7 +383,37 @@ class RealTimePlot(wx.Frame):
 
         v2.Add(ctrlabelSizer, 0, wx.ALL | wx.Center, 5)
 
-        # robotControlsSizer = wx.BoxSizer(wx.VERTICAL)
+
+        test = wx.BoxSizer(wx.VERTICAL)
+
+        magnetBox = wx.BoxSizer(wx.HORIZONTAL)
+
+        # bmp = wx.ArtProvider.GetBitmap(wx.ART_TIP, wx.ART_OTHER, (16, 16))
+        # magnetStatusIco = wx.StaticBitmap(panel, wx.ID_ANY, bmp)
+        magnetStatusLabel = wx.StaticText(panel, wx.ID_ANY, 'Magnet State: ')
+        self.magnetStatus = wx.StaticText(panel, wx.ID_ANY, label='N/A')
+
+        # magnetBox.Add(currentStateIco, 0, wx.ALL, 5)
+        magnetBox.Add(magnetStatusLabel, 0, wx.ALL, 5)
+        magnetBox.Add(self.magnetStatus, 1, wx.ALL|wx.EXPAND, 5)
+
+
+        colroBox = wx.BoxSizer(wx.HORIZONTAL)
+
+        # bmp = wx.ArtProvider.GetBitmap(wx.ART_TIP, wx.ART_OTHER, (16, 16))
+        # ColorBoxIco = wx.StaticBitmap(panel, wx.ID_ANY, bmp)
+        ColorboxLabel = wx.StaticText(panel, wx.ID_ANY, 'Color Box: ')
+        self.colorBox = wx.StaticText(panel, wx.ID_ANY, label='N/A')
+
+        colroBox.Add(ColorboxLabel, 0, wx.ALL, 5)
+        colroBox.Add(self.colorBox, 1, wx.ALL|wx.EXPAND, 5)
+
+        test.Add(magnetBox, 0, wx.ALL|wx.EXPAND, 5)
+        test.Add(colroBox, 0, wx.ALL|wx.EXPAND, 5)
+
+        v2.Add(test, 0, wx.ALL | wx.Center, 5)
+
+    # robotControlsSizer = wx.BoxSizer(wx.VERTICAL)
 
         # robotStartStopSizer = wx.BoxSizer(wx.HORIZONTAL)
         
@@ -499,8 +542,24 @@ class RealTimePlot(wx.Frame):
 
         panel.Bind(wx.EVT_BUTTON, self.OnBtnSubmit)
         EVT_RESULT(self, self.onRobotData)
+        self.prevData = None
+        self.blocked = []
 
     def onRobotData(self, data: RobotDataEvent):
+        if self.prevData and self.prevData == str(data.data):
+            return
+
+        self.prevData = str(data.data)
+
+        if data.color:
+            self.colorBox.SetLabel(data.color)
+
+        if data.magnet != None:
+            self.magnetStatus.SetLabel(str(data.magnet))
+
+            # if data.magnet == False:
+            #     self.colorBox.SetLabel("N/A")
+
         # print(data)
         if data.error:
             data.data = "[ERROR] - " + data.data
@@ -509,17 +568,33 @@ class RealTimePlot(wx.Frame):
             print("Set path")
             self.SetShortedPath(data.path)
 
+        if data.blocked:
+            if self.blocked != data.blocked:
+                self.SetBlockedPaths(data.blocked)
+
         if data.any:
-            self.currentPos.SetLabel(data.currentPos)
-            self.currentState.SetLabel(data.currentState)
-            self.currentHeading.SetLabel(data.currentHeading)
+            if self.currentPos.GetLabel() != data.currentPos:
+                self.currentPos.SetLabel(data.currentPos)
 
-            self.nextState.SetLabel(data.nextState)
-            self.nextHeading.SetLabel(data.nextHeading)
-            self.nextPos.SetLabel(data.nextPos)
+            if self.currentState.GetLabel() != data.currentState:
+                self.currentState.SetLabel(data.currentState)
 
-            print("Set pos")
-            self.SetRobotPos((data.currentPos, data.nextPos))
+            if self.currentHeading.GetLabel() != data.currentHeading:
+                self.currentHeading.SetLabel(data.currentHeading)
+
+            if self.nextPos.GetLabel() != data.nextPos:
+                self.nextPos.SetLabel(data.nextPos)
+
+            if self.nextState.GetLabel() != data.nextState:
+                self.nextState.SetLabel(data.nextState)
+
+            if self.nextHeading.GetLabel() != data.nextHeading:
+                self.nextHeading.SetLabel(data.nextHeading)
+
+            # print("Set pos")
+
+            if self.cachPos != (data.currentPos, data.nextPos):
+                self.SetRobotPos((data.currentPos, data.nextPos))
         else:
             self.currentPos.SetLabel("N/A")
             self.currentState.SetLabel("N/A")
@@ -529,10 +604,10 @@ class RealTimePlot(wx.Frame):
             self.nextHeading.SetLabel("N/A")
             self.nextPos.SetLabel("N/A")
 
-        self.canvas.draw()
 
         self.textbox.AppendText(data.data + '\n')
         # self.textbox.AppendText(f"State: STRAIGHT, {self.shortestPathData[i]}: {self.shortestPathData[i+1]}, Head: {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]} -> {mapping.nodes[self.shortestPathData[i]][self.shortestPathData[i+1]][1]}, [1, 1, 1, 1, 1], [999, 999, 999, 999, 999]\n")
+
         if self.autoscroll:
             self.textbox.SetInsertionPointEnd()
 
@@ -547,20 +622,23 @@ class RealTimePlot(wx.Frame):
         self.ydataPoints = [coord[1] for coord in mapping.plottingData.values()]
         self.points = self.ax.scatter(self.xdataPoints, self.ydataPoints, lw=3, color="red")
 
+
         self.shortestPathData = None
         self.shortestPath, = self.ax.plot([],[], lw=3, color="blue")
         self.startEndpoints = self.ax.scatter([],[], color="blue", lw=4)
         
         self.robotPos, = self.ax.plot([],[], lw=4, color="green")
+        self.cachPos = None
+
+        self.blocked = None
+        self.blockedConns: dict[str, plt.Line2D] = {}
 
         for letter, (x, y) in mapping.plottingData.items():
             self.ax.text(x+1/20, y+1/20, letter, fontsize=12, ha='center', va='center')
     
         self.ax.grid()
 
-        
-        # self.ani = animation.FuncAnimation(self.fig, self.UpdatePlot, frames=13, interval=1000)
-    
+
     def SetShortedPath(self, path: list[str]):
         self.shortestPathData = path
 
@@ -573,14 +651,42 @@ class RealTimePlot(wx.Frame):
         self.shortestPath.set_data(xB, yB)
         self.startEndpoints.set_offsets(np.column_stack(([xB[0], xB[-1]], [yB[0], yB[-1]])))
 
+        self.canvas.draw()
         return self.shortestPath, self.startEndpoints,
 
+    def SetBlockedPaths(self, blocks: list[str]):
+
+        for name in self.blockedConns:
+            line = self.blockedConns[name]
+
+            line: plt.Line2D
+            # if name not in blocks:
+            line.set_data([], [])
+            line.remove()
+
+            del name
+
+        for con in blocks:
+            A,B = con.split("-")
+            a, b = mapping.plottingData[A], mapping.plottingData[B]
+            x,y = [a[0], b[0]],[a[1], b[1]]
+
+            self.blockedConns[con] = self.ax.plot(x, y, lw=4, color="red")[0]
+            # self.robotBlockeds.set_data(x,y)
+
+        # print(blocks, self.blockedConns.keys())
+        self.canvas.draw()
+
+        return self.blockedConns
+
     def SetRobotPos(self, pos: tuple[str,str]):
+        self.cachPos = pos
         a, b = mapping.plottingData[pos[0]], mapping.plottingData[pos[1]]
         x,y = [a[0], b[0]],[a[1], b[1]]
 
         self.robotPos.set_data(x,y)
 
+        self.canvas.draw()
         return self.robotPos, 
 
     def UpdatePlot(self, i):

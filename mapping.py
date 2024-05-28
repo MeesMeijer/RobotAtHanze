@@ -36,11 +36,6 @@ class BoxPlaces:
     BLACK = "X"
     GREEN = "Z"
 
-    A = "A"
-    B = "B"
-    C = "C"
-    D = "D"
-
 
 #   N
 # W   E
